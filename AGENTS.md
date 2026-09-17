@@ -8,12 +8,14 @@ Interactive diff viewer extension for pi.
 - `src/git.ts` reads uncommitted changes from git.
 - `src/turns.ts` reconstructs per-turn diffs from session data, no git.
 - `src/ui.ts` renders the scrollable overlay.
+- `test/` behavior tests (`node:test`) for git collection and turn grouping.
 
 ## Dev
 
 ```bash
 npm install          # optional, pi provides the peer deps at runtime
 npm run typecheck
+npm test
 pi -e ./src/index.ts # then run /diff
 ```
 

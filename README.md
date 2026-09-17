@@ -53,3 +53,15 @@ Keys:
   per call, so reconstruction needs no git and works outside a repo. The `write`
   tool stores no diff, so a `tool_call` handler snapshots the old content and
   synthesizes one. Write snapshots are in-memory for now.
+
+## Development
+
+```bash
+npm install
+npm run typecheck
+npm test
+pi -e ./src/index.ts   # then run /diff
+```
+
+Tests use the built-in `node:test` runner with no extra dependencies. Git tests
+build throwaway repos under the system temp directory.
