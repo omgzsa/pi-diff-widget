@@ -1,5 +1,6 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
-import { collectUncommitted, type DiffFile, type ExecFn } from './git.ts';
+import { collectUncommitted, type DiffFile } from './git.ts';
+import type { ExecFn } from './exec.ts';
 import { createBaselineTracker } from './baseline.ts';
 import { collectTurns, createWriteDiffTracker } from './turns.ts';
 import { DiffViewer } from './ui.ts';

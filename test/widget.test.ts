@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import type { DocumentTheme } from '../src/ui.ts';
+import type { DocumentTheme } from '../src/document.ts';
 import type { EditSummary } from '../src/view.ts';
 import { buildEditSummaryLines } from '../src/widget.ts';
 

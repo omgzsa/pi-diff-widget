@@ -4,13 +4,16 @@ Interactive diff viewer extension for pi.
 
 ## Layout
 
-- `src/index.ts` registers `/diff` and wires the viewer.
+- `src/index.ts` registers `/diff` and `/diff-widget`, and wires the pieces.
+- `src/exec.ts` the `ExecFn` shell-out signature shared by git and the widget.
 - `src/git.ts` reads uncommitted changes from git.
 - `src/turns.ts` reconstructs per-turn diffs from session data, no git.
-- `src/ui.ts` renders the scrollable overlay.
-- `src/view.ts` defines view models and maps collected data into them.
 - `src/baseline.ts` captures pre-agent file content for the net edits widget.
-- `src/widget.ts` renders the live edits summary above the editor.
+- `src/summary.ts` computes net changes and reverts to baselines, no TUI.
+- `src/view.ts` defines view models and maps collected data into them.
+- `src/document.ts` builds the flat document the viewer renders, pure.
+- `src/ui.ts` renders the scrollable overlay.
+- `src/widget.ts` renders the live edits summary and its command.
 - `test/` behavior tests (`node:test`) for git collection, turns, view models, and the viewer.
 - `ROADMAP.md` planned work and known gaps; check it before starting new work.
 

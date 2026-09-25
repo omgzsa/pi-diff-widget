@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import type { ExecFn } from '../src/git.ts';
+import type { ExecFn } from '../src/exec.ts';
 
 /** Runs real git through a promise wrapper, matching pi's `exec` shape. */
 export const execFn: ExecFn = (command, args, options) =>

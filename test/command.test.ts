@@ -8,7 +8,7 @@ import type {
 } from '@earendil-works/pi-coding-agent';
 import type { TUI } from '@earendil-works/pi-tui';
 import { collectTurns } from '../src/turns.ts';
-import type { DocumentTheme } from '../src/ui.ts';
+import type { DocumentTheme } from '../src/document.ts';
 import {
     commitAll,
     execFn,

@@ -1,14 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { generateDiffString } from '@earendil-works/pi-coding-agent';
-import type { ExecOptions, ExecResult } from '@earendil-works/pi-coding-agent';
-
-/** The subset of `ExtensionAPI` the git reader needs. */
-export type ExecFn = (
-    command: string,
-    args: string[],
-    options?: ExecOptions,
-) => Promise<ExecResult>;
+import type { ExecResult } from '@earendil-works/pi-coding-agent';
+import type { ExecFn } from './exec.ts';
 
 export type FileStatus =
     | 'added'
@@ -25,7 +19,8 @@ export interface DiffFile {
     diff: string;
 }
 
-const MAX_TEXT_BYTES = 512 * 1024;const MAX_DIFF_LINES = 4000;
+const MAX_TEXT_BYTES = 512 * 1024;
+const MAX_DIFF_LINES = 4000;
 
 function splitNul(value: string): string[] {
     return value.split('\0').filter((part) => part.length > 0);

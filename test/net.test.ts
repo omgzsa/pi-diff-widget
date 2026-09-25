@@ -9,7 +9,7 @@ import {
     computeNetSummary,
     pruneCleanBaselines,
     revertTargets,
-} from '../src/widget.ts';
+} from '../src/summary.ts';
 import { commitAll, execFn, initRepo, makeTempDir, write } from './support.ts';
 
 test('net summary diffs current content against the baseline', async (t) => {
