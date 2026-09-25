@@ -9,7 +9,7 @@
         "git"
     ],
     "license": "MIT",
-    "author": "omgzsa <zselloandras@gmail.com>",
+    "author": "omgzsa",
     "repository": {
         "type": "git",
         "url": "git+https://github.com/omgzsa/pi-diff-widget.git"
