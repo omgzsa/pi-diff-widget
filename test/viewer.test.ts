@@ -2,13 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { visibleWidth } from '@earendil-works/pi-tui';
 import type { TUI } from '@earendil-works/pi-tui';
-import {
-    DiffViewer,
-    type DiffSection,
-    type DocumentTheme,
-    type TurnView,
-    type ViewMode,
-} from '../src/ui.ts';
+import { DiffViewer, type DocumentTheme } from '../src/ui.ts';
+import type { DiffSection, TurnView, ViewMode } from '../src/view.ts';
 
 const theme: DocumentTheme = {
     fg: (color, text) => `[${color}]${text}`,

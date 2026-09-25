@@ -1,10 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import {
-    buildDocument,
-    type DiffSection,
-    type DocumentTheme,
-} from '../src/ui.ts';
+import { buildDocument, type DocumentTheme } from '../src/ui.ts';
+import type { DiffSection } from '../src/view.ts';
 
 const theme: DocumentTheme = {
     fg: (color, text) => `[${color}]${text}`,

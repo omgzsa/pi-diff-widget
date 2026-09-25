@@ -2,21 +2,7 @@ import { Key, matchesKey, truncateToWidth } from '@earendil-works/pi-tui';
 import type { Component, TUI } from '@earendil-works/pi-tui';
 import { renderDiff } from '@earendil-works/pi-coding-agent';
 import type { Theme } from '@earendil-works/pi-coding-agent';
-
-export interface DiffSection {
-    title: string;
-    detail?: string;
-    /** Raw display diff in pi's line-numbered format. Rendered with `renderDiff`. */
-    diff?: string;
-    note?: string;
-}
-
-export interface TurnView {
-    label: string;
-    sections: DiffSection[];
-}
-
-export type ViewMode = 'uncommitted' | 'turns';
+import type { DiffSection, TurnView, ViewMode } from './view.ts';
 
 /** The theme methods `buildDocument` uses. */
 export type DocumentTheme = Pick<Theme, 'fg' | 'bold'>;
