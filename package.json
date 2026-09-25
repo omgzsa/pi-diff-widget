@@ -1,5 +1,5 @@
 {
-    "name": "pi-diff-view",
+    "name": "pi-diff-widget",
     "version": "0.0.1",
     "description": "Interactive diff viewer for pi: uncommitted changes and per-turn diffs",
     "keywords": [
@@ -12,11 +12,11 @@
     "author": "omgzsa <zselloandras@gmail.com>",
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/omgzsa/pi-diff-review.git"
+        "url": "git+https://github.com/omgzsa/pi-diff-widget.git"
     },
-    "homepage": "https://github.com/omgzsa/pi-diff-review#readme",
+    "homepage": "https://github.com/omgzsa/pi-diff-widget#readme",
     "bugs": {
-        "url": "https://github.com/omgzsa/pi-diff-review/issues"
+        "url": "https://github.com/omgzsa/pi-diff-widget/issues"
     },
     "type": "module",
     "files": [

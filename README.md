@@ -1,11 +1,11 @@
-# pi-diff-view
+# pi-diff-widget
 
 Interactive diff viewer and live edits widget for [pi](https://pi.dev).
 
 ## Install
 
 ```bash
-pi install npm:pi-diff-view
+pi install npm:pi-diff-widget
 # or from a checkout
 pi install /absolute/path/to/pi-diff
 ```
