@@ -1,4 +1,5 @@
-import { relative } from 'node:path';
+import { mkdir, unlink, writeFile } from 'node:fs/promises';
+import { dirname, relative } from 'node:path';
 import { truncateToWidth } from '@earendil-works/pi-tui';
 import type { Component, TUI } from '@earendil-works/pi-tui';
 import { generateDiffString } from '@earendil-works/pi-coding-agent';
@@ -72,6 +73,51 @@ export async function computeNetSummary(
     }
 
     return summarizeDiffs(diffs);
+}
+
+export interface RevertTarget {
+    absolutePath: string;
+    relativePath: string;
+    baseline: string;
+    missing: boolean;
+}
+
+/** Files whose current content differs from their baseline. */
+export async function collectRevertTargets(
+    baselines: BaselineTracker,
+    cwd: string,
+): Promise<RevertTarget[]> {
+    const targets: RevertTarget[] = [];
+    for (const absolute of baselines.paths()) {
+        const current = await readFileCapped(absolute);
+        if (current === undefined) continue;
+        const baseline = baselines.get(absolute) ?? '';
+        const { diff } = generateDiffString(baseline, current);
+        if (!diff) continue;
+        const rel = relative(cwd, absolute);
+        targets.push({
+            absolutePath: absolute,
+            relativePath: rel.startsWith('..') ? absolute : rel,
+            baseline,
+            missing: baselines.wasMissing(absolute),
+        });
+    }
+    return targets;
+}
+
+/**
+ * Restore files to their baselines: write the original content back, or delete
+ * files the agent created. The caller confirms first, since this is destructive.
+ */
+export async function revertTargets(targets: RevertTarget[]): Promise<void> {
+    for (const target of targets) {
+        if (target.missing) {
+            await unlink(target.absolutePath).catch(() => undefined);
+            continue;
+        }
+        await mkdir(dirname(target.absolutePath), { recursive: true });
+        await writeFile(target.absolutePath, target.baseline, 'utf8');
+    }
 }
 
 class EditSummaryWidget implements Component {
@@ -153,9 +199,37 @@ export function registerDiffWidget(
 
     pi.registerCommand('diff-widget', {
         description:
-            'Toggle the live edits widget: on, off, or accept (keep current state)',
+            'Live edits widget: on, off, accept (keep), or reject (undo)',
         handler: async (args, ctx) => {
             const action = args.trim().toLowerCase();
+
+            if (action === 'reject') {
+                await ctx.waitForIdle();
+                const targets = await collectRevertTargets(baselines, ctx.cwd);
+                if (targets.length === 0) {
+                    ctx.ui.notify('Nothing to reject', 'info');
+                    return;
+                }
+                const names = targets
+                    .slice(0, 5)
+                    .map((target) => target.relativePath)
+                    .join(', ');
+                const rest =
+                    targets.length > 5 ? ` and ${targets.length - 5} more` : '';
+                const confirmed = await ctx.ui.confirm(
+                    'Reject agent edits?',
+                    `Restore ${targets.length} file(s) to their pre-agent content: ${names}${rest}. This cannot be undone.`,
+                );
+                if (!confirmed) return;
+
+                await revertTargets(targets);
+                await update(ctx);
+                ctx.ui.notify(
+                    `Rejected edits to ${targets.length} file(s)`,
+                    'info',
+                );
+                return;
+            }
 
             if (action === 'accept' || action === 'keep') {
                 await baselines.rebaseline(pi);
@@ -166,7 +240,14 @@ export function registerDiffWidget(
 
             if (action === 'on') visible = true;
             else if (action === 'off') visible = false;
-            else visible = !visible;
+            else if (action === '') visible = !visible;
+            else {
+                ctx.ui.notify(
+                    `Unknown action "${action}". Use on, off, accept, or reject.`,
+                    'warning',
+                );
+                return;
+            }
 
             await update(ctx);
             ctx.ui.notify(`Edits widget ${visible ? 'on' : 'off'}`, 'info');

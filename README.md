@@ -57,16 +57,19 @@ churn. Committing a file drops it from the panel automatically, so what remains
 is the agent's work that is not yet committed. Paths are shown relative to the
 working directory. Baselines live in the session, capped at 256 KB per file.
 
-It hides itself when nothing differs. `/diff-widget` toggles it, and
-`/diff-widget accept` (alias `keep`) makes the current state the new baseline and
-clears the panel until the agent edits again, the equivalent of Zed's Keep All.
+It hides itself when nothing differs. `/diff-widget` toggles it. `/diff-widget
+accept` (alias `keep`) makes the current state the new baseline, the equivalent of
+Zed's Keep All. `/diff-widget reject` restores every tracked file to its
+pre-agent content, deleting files the agent created and recreating ones it
+deleted. It asks for confirmation first, and cannot be undone. Unknown actions
+report a warning rather than toggling the widget.
 
 ## Status
 
 - [x] Uncommitted changes (`git diff HEAD` plus untracked files)
 - [x] Per-turn diffs grouped by prompt, reconstructed from session edit results
 - [x] `write`-tool before/after snapshots, persisted per turn
-- [x] Live net edits widget above the editor, with `/diff-widget on|off|accept`
+- [x] Live net edits widget above the editor, with `/diff-widget on|off|accept|reject`
 
 See [ROADMAP.md](./ROADMAP.md) for planned work and known gaps.
 

@@ -4,6 +4,19 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.5] - 2026-09-25
+
+### Added
+
+- `/diff-widget reject` restores tracked files to their pre-agent content,
+  deleting files the agent created and recreating ones it deleted. It confirms
+  first, since it cannot be undone.
+
+### Fixed
+
+- Unknown `/diff-widget` actions now report a warning instead of silently
+  toggling the widget. Previously a typo such as `reset` turned it off.
+
 ## [0.0.4] - 2026-09-25
 
 ### Fixed

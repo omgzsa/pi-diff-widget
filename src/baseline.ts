@@ -9,20 +9,38 @@ const MAX_BASELINE_BYTES = 256 * 1024;
 export interface BaselineRecord {
     path: string;
     content: string;
+    /** True when the file did not exist when the baseline was captured. */
+    missing?: boolean;
+}
+
+export interface BaselineRead {
+    content: string;
+    existed: boolean;
 }
 
 /**
- * Read a file. Returns '' when it does not exist (an empty baseline for new
- * files) and undefined when it is too large or unreadable.
+ * Read a file for baselining. `existed` distinguishes a missing file (empty
+ * baseline) from a genuinely empty file, which reject needs in order to delete
+ * versus empty. Returns undefined when the file is too large or unreadable.
  */
+export async function readBaseline(
+    path: string,
+    maxBytes = MAX_BASELINE_BYTES,
+): Promise<BaselineRead | undefined> {
+    const info = await stat(path).catch(() => undefined);
+    if (!info || !info.isFile()) return { content: '', existed: false };
+    if (info.size > maxBytes) return undefined;
+    const content = await readFile(path, 'utf8').catch(() => undefined);
+    if (content === undefined) return undefined;
+    return { content, existed: true };
+}
+
+/** Content only, for callers that do not care whether the file existed. */
 export async function readFileCapped(
     path: string,
     maxBytes = MAX_BASELINE_BYTES,
 ): Promise<string | undefined> {
-    const info = await stat(path).catch(() => undefined);
-    if (!info || !info.isFile()) return '';
-    if (info.size > maxBytes) return undefined;
-    return readFile(path, 'utf8').catch(() => undefined);
+    return (await readBaseline(path, maxBytes))?.content;
 }
 
 /**
@@ -31,6 +49,7 @@ export async function readFileCapped(
  */
 export class BaselineTracker {
     private readonly baselines = new Map<string, string>();
+    private readonly missing = new Set<string>();
     private readonly unflushed = new Set<string>();
 
     get(path: string): string | undefined {
@@ -41,21 +60,26 @@ export class BaselineTracker {
         return [...this.baselines.keys()];
     }
 
+    /** True when the path did not exist before the agent first touched it. */
+    wasMissing(path: string): boolean {
+        return this.missing.has(path);
+    }
+
     async capture(cwd: string, path: string): Promise<void> {
         const absolute = resolve(cwd, path);
         if (this.baselines.has(absolute)) return;
-        const content = await readFileCapped(absolute);
-        if (content === undefined) return;
-        this.baselines.set(absolute, content);
+        const read = await readBaseline(absolute);
+        if (read === undefined) return;
+        this.store(absolute, read);
         this.unflushed.add(absolute);
     }
 
     /** Accept current content as the new baseline, so net changes drop to zero. */
     async rebaseline(pi: ExtensionAPI): Promise<void> {
         for (const path of [...this.baselines.keys()]) {
-            const content = await readFileCapped(path);
-            if (content === undefined) continue;
-            this.baselines.set(path, content);
+            const read = await readBaseline(path);
+            if (read === undefined) continue;
+            this.store(path, read);
             this.unflushed.add(path);
         }
         this.flush(pi);
@@ -64,8 +88,17 @@ export class BaselineTracker {
     /** Drop baselines whose absolute path fails the predicate. */
     retain(keep: (path: string) => boolean): void {
         for (const path of [...this.baselines.keys()]) {
-            if (!keep(path)) this.baselines.delete(path);
+            if (!keep(path)) {
+                this.baselines.delete(path);
+                this.missing.delete(path);
+            }
         }
+    }
+
+    private store(path: string, read: BaselineRead): void {
+        this.baselines.set(path, read.content);
+        if (read.existed) this.missing.delete(path);
+        else this.missing.add(path);
     }
 
     flush(pi: ExtensionAPI): void {
@@ -73,7 +106,12 @@ export class BaselineTracker {
         const records: BaselineRecord[] = [];
         for (const path of this.unflushed) {
             const content = this.baselines.get(path);
-            if (content !== undefined) records.push({ path, content });
+            if (content === undefined) continue;
+            records.push({
+                path,
+                content,
+                missing: this.missing.has(path) ? true : undefined,
+            });
         }
         this.unflushed.clear();
         if (records.length > 0) {
@@ -92,7 +130,10 @@ export class BaselineTracker {
             if (!Array.isArray(records)) continue;
             for (const record of records) {
                 // Later entries win, so accepting can re-baseline a path.
-                this.baselines.set(record.path, record.content);
+                this.store(record.path, {
+                    content: record.content,
+                    existed: record.missing !== true,
+                });
             }
         }
     }

@@ -99,3 +99,39 @@ test('retain drops baselines that fail the predicate', async (t) => {
     baselines.retain((path) => path.endsWith('a.ts'));
     assert.deepEqual(baselines.paths(), [`${dir}/a.ts`]);
 });
+
+test('wasMissing distinguishes a new file from an empty one', async (t) => {
+    const dir = await makeTempDir('pi-diff-baseline-');
+    t.after(() => rm(dir, { recursive: true, force: true }));
+
+    await write(dir, 'empty.ts', '');
+    const baselines = new BaselineTracker();
+    await baselines.capture(dir, 'empty.ts');
+    await baselines.capture(dir, 'new.ts');
+
+    assert.equal(baselines.wasMissing(`${dir}/empty.ts`), false);
+    assert.equal(baselines.wasMissing(`${dir}/new.ts`), true);
+});
+
+test('flush and load preserve the missing flag', async (t) => {
+    const dir = await makeTempDir('pi-diff-baseline-');
+    t.after(() => rm(dir, { recursive: true, force: true }));
+
+    const baselines = new BaselineTracker();
+    await baselines.capture(dir, 'new.ts');
+    const { pi, entries } = captureEntry();
+    baselines.flush(pi);
+
+    const restored = new BaselineTracker();
+    restored.load([
+        {
+            type: 'custom',
+            id: 'x1',
+            parentId: null,
+            customType: BASELINE_ENTRY,
+            data: entries[0]?.data,
+        } as unknown as SessionEntry,
+    ]);
+    assert.equal(restored.get(`${dir}/new.ts`), '');
+    assert.equal(restored.wasMissing(`${dir}/new.ts`), true);
+});

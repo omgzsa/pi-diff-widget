@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict';
-import { rm } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
 import { test } from 'node:test';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { BaselineTracker, readFileCapped } from '../src/baseline.ts';
-import { computeNetSummary, pruneCleanBaselines } from '../src/widget.ts';
+import {
+    collectRevertTargets,
+    computeNetSummary,
+    pruneCleanBaselines,
+    revertTargets,
+} from '../src/widget.ts';
 import { commitAll, execFn, initRepo, makeTempDir, write } from './support.ts';
 
 test('net summary diffs current content against the baseline', async (t) => {
@@ -102,6 +108,67 @@ test('committing a file drops it from the widget inputs', async (t) => {
 
     assert.deepEqual(baselines.paths(), []);
     assert.equal((await computeNetSummary(baselines, repo)).fileCount, 0);
+});
+
+test('reject restores a modified file to its baseline', async (t) => {
+    const dir = await makeTempDir('pi-diff-revert-');
+    t.after(() => rm(dir, { recursive: true, force: true }));
+
+    await write(dir, 'a.ts', 'one\n');
+    const baselines = new BaselineTracker();
+    await baselines.capture(dir, 'a.ts');
+    await write(dir, 'a.ts', 'two\n');
+
+    const targets = await collectRevertTargets(baselines, dir);
+    assert.equal(targets.length, 1);
+    await revertTargets(targets);
+
+    assert.equal(await readFile(join(dir, 'a.ts'), 'utf8'), 'one\n');
+    assert.equal((await computeNetSummary(baselines, dir)).fileCount, 0);
+});
+
+test('reject deletes a file the agent created', async (t) => {
+    const dir = await makeTempDir('pi-diff-revert-');
+    t.after(() => rm(dir, { recursive: true, force: true }));
+
+    const baselines = new BaselineTracker();
+    await baselines.capture(dir, 'fresh.ts');
+    await write(dir, 'fresh.ts', 'new\n');
+
+    const targets = await collectRevertTargets(baselines, dir);
+    await revertTargets(targets);
+
+    await assert.rejects(() => readFile(join(dir, 'fresh.ts'), 'utf8'));
+});
+
+test('reject recreates a file the agent deleted', async (t) => {
+    const dir = await makeTempDir('pi-diff-revert-');
+    t.after(() => rm(dir, { recursive: true, force: true }));
+
+    await write(dir, 'gone.ts', 'original\n');
+    const baselines = new BaselineTracker();
+    await baselines.capture(dir, 'gone.ts');
+    await rm(join(dir, 'gone.ts'));
+
+    const targets = await collectRevertTargets(baselines, dir);
+    await revertTargets(targets);
+
+    assert.equal(await readFile(join(dir, 'gone.ts'), 'utf8'), 'original\n');
+});
+
+test('reject empties a file that was empty before, rather than deleting it', async (t) => {
+    const dir = await makeTempDir('pi-diff-revert-');
+    t.after(() => rm(dir, { recursive: true, force: true }));
+
+    await write(dir, 'empty.ts', '');
+    const baselines = new BaselineTracker();
+    await baselines.capture(dir, 'empty.ts');
+    await write(dir, 'empty.ts', 'filled\n');
+
+    assert.equal(baselines.wasMissing(`${dir}/empty.ts`), false);
+    await revertTargets(await collectRevertTargets(baselines, dir));
+
+    assert.equal(await readFile(join(dir, 'empty.ts'), 'utf8'), '');
 });
 
 test('readFileCapped returns undefined for oversized files', async (t) => {    const dir = await makeTempDir('pi-diff-net-');

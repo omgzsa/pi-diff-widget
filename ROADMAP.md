@@ -57,8 +57,8 @@ storing a hash and skipping the widget entry when the file exceeds the cap.
 ## Not planned
 
 - Accept/reject of individual hunks. pi has no checkpoint model, and widgets are
-  read-only. The closest equivalent is `/diff-widget accept`, which accepts the
-  whole current state.
+  read-only. Whole-file operations exist (`/diff-widget accept` and `reject`), but
+  there is no hunk-level model.
 
 ## Done
 
@@ -67,4 +67,4 @@ storing a hash and skipping the widget entry when the file exceeds the cap.
 - Per-turn view from session data, with `write` diffs persisted per turn.
 - `Tab` source toggle and `[` / `]` turn stepping.
 - Live net edits widget above the editor. Drops files once they are committed,
-  with `/diff-widget on|off|accept`.
+  with `/diff-widget on|off|accept|reject`.
