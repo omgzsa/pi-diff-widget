@@ -1,10 +1,15 @@
+import { relative } from 'node:path';
 import { truncateToWidth } from '@earendil-works/pi-tui';
 import type { Component, TUI } from '@earendil-works/pi-tui';
-import type { ExtensionAPI, ExtensionContext } from '@earendil-works/pi-coding-agent';
+import { generateDiffString } from '@earendil-works/pi-coding-agent';
+import type {
+    ExtensionAPI,
+    ExtensionContext,
+} from '@earendil-works/pi-coding-agent';
 import type { Theme } from '@earendil-works/pi-coding-agent';
-import { collectTurns, type WriteDiffLookup } from './turns.ts';
+import { readFileCapped, type BaselineTracker } from './baseline.ts';
 import type { DocumentTheme } from './ui.ts';
-import { summarizeEdits, type EditSummary } from './view.ts';
+import { summarizeDiffs, type EditSummary } from './view.ts';
 
 export const WIDGET_KEY = 'pi-diff';
 const MAX_FILES = 8;
@@ -25,7 +30,8 @@ export function buildEditSummaryLines(
     theme: DocumentTheme,
     maxFiles = MAX_FILES,
 ): string[] {
-    const label = summary.fileCount === 1 ? '1 file' : `${summary.fileCount} files`;
+    const label =
+        summary.fileCount === 1 ? '1 file' : `${summary.fileCount} files`;
     const lines = [
         `${theme.fg('accent', theme.bold('edits'))} ${theme.fg('dim', `· ${label} · `)}${formatCounts(summary, theme)}`,
     ];
@@ -43,6 +49,30 @@ export function buildEditSummaryLines(
     return lines;
 }
 
+/**
+ * Net agent changes: for each file the agent touched, diff its current content
+ * against the baseline captured before the first touch. Reverted files vanish.
+ */
+export async function computeNetSummary(
+    baselines: BaselineTracker,
+    cwd: string,
+): Promise<EditSummary> {
+    const diffs: Array<{ path: string; diff: string }> = [];
+
+    for (const absolute of baselines.paths()) {
+        const current = await readFileCapped(absolute);
+        if (current === undefined) continue; // too large or unreadable
+        const baseline = baselines.get(absolute) ?? '';
+        const { diff } = generateDiffString(baseline, current);
+        if (!diff) continue;
+
+        const rel = relative(cwd, absolute);
+        diffs.push({ path: rel.startsWith('..') ? absolute : rel, diff });
+    }
+
+    return summarizeDiffs(diffs);
+}
+
 class EditSummaryWidget implements Component {
     private readonly lines: string[];
 
@@ -58,25 +88,23 @@ class EditSummaryWidget implements Component {
 }
 
 /**
- * Show a live per-file edit summary above the editor, refreshed at turn
- * boundaries. Hidden when the session has no edits.
+ * Show net agent edits above the editor, refreshed at turn boundaries. Hidden
+ * when nothing differs from the session baselines.
  */
 export function registerDiffWidget(
     pi: ExtensionAPI,
-    lookupWrite: WriteDiffLookup,
+    baselines: BaselineTracker,
 ): void {
     let visible = true;
 
-    const update = (ctx: ExtensionContext) => {
+    const update = async (ctx: ExtensionContext) => {
         if (!ctx.hasUI) return;
         if (!visible) {
             ctx.ui.setWidget(WIDGET_KEY, undefined);
             return;
         }
 
-        const summary = summarizeEdits(
-            collectTurns(ctx.sessionManager, lookupWrite),
-        );
+        const summary = await computeNetSummary(baselines, ctx.cwd);
         if (summary.fileCount === 0) {
             ctx.ui.setWidget(WIDGET_KEY, undefined);
             return;
@@ -89,9 +117,9 @@ export function registerDiffWidget(
         );
     };
 
-    pi.on('session_start', (_event, ctx) => update(ctx));
-    pi.on('turn_end', (_event, ctx) => update(ctx));
-    pi.on('agent_settled', (_event, ctx) => update(ctx));
+    pi.on('session_start', (_event, ctx) => void update(ctx));
+    pi.on('turn_end', (_event, ctx) => void update(ctx));
+    pi.on('agent_settled', (_event, ctx) => void update(ctx));
     pi.on('session_shutdown', (_event, ctx) => {
         if (ctx.hasUI) ctx.ui.setWidget(WIDGET_KEY, undefined);
     });
@@ -100,7 +128,7 @@ export function registerDiffWidget(
         description: 'Toggle the live edits widget above the editor',
         handler: async (_args, ctx) => {
             visible = !visible;
-            update(ctx);
+            await update(ctx);
             ctx.ui.notify(`Edits widget ${visible ? 'on' : 'off'}`, 'info');
         },
     });

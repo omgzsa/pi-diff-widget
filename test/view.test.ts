@@ -5,7 +5,7 @@ import type { Turn } from '../src/turns.ts';
 import {
     summarizePrompt,
     countDiffLines,
-    summarizeEdits,
+    summarizeDiffs,
     toTurnViews,
     toUncommittedSections,
     type EditSummary,
@@ -68,21 +68,12 @@ test('countDiffLines counts added and removed lines, ignoring separators', () =>
     });
 });
 
-test('summarizeEdits aggregates per file across turns', () => {
-    const turns: Turn[] = [
-        {
-            prompt: 'a',
-            edits: [
-                { path: 'b.ts', diff: '+1 x' },
-                { path: 'a.ts', diff: '+1 y' },
-            ],
-        },
-        {
-            prompt: 'b',
-            edits: [{ path: 'b.ts', diff: '+1 z\n-1 q' }],
-        },
-    ];
-    const summary: EditSummary = summarizeEdits(turns);
+test('summarizeDiffs aggregates per file and sorts by path', () => {
+    const summary: EditSummary = summarizeDiffs([
+        { path: 'b.ts', diff: '+1 x' },
+        { path: 'a.ts', diff: '+1 y' },
+        { path: 'b.ts', diff: '+1 z\n-1 q' },
+    ]);
 
     assert.equal(summary.fileCount, 2);
     assert.equal(summary.added, 3);

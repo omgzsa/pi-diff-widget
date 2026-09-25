@@ -38,8 +38,8 @@ Keys:
 
 ## Live edits widget
 
-Above the editor, pi-diff shows a live summary of the files the agent changed
-this session, refreshed at each turn boundary:
+Above the editor, pi-diff shows the net effect of the agent's edits this
+session, refreshed at each turn boundary:
 
 ```
 edits · 3 files · +3 -0
@@ -48,15 +48,21 @@ src/index.ts    +1 -0
 src/ui.ts       +1 -0
 ```
 
-It hides itself when the session has no edits. Toggle it with `/diff-widget`.
-Counts are churn, not net: editing the same line twice reports `+1 -1`.
+For each file the agent touches, pi-diff records the content before the first
+touch and diffs it against the current content. Reverted files drop out and the
+counts are net, so it shows what the agent has actually changed, not cumulative
+churn. It is independent of git: committing does not reset it. Paths are shown
+relative to the working directory. Baselines live in the session, capped at
+256 KB per file.
+
+It hides itself when nothing differs. Toggle it with `/diff-widget`.
 
 ## Status
 
 - [x] Uncommitted changes (`git diff HEAD` plus untracked files)
 - [x] Per-turn diffs grouped by prompt, reconstructed from session edit results
 - [x] `write`-tool before/after snapshots, persisted per turn
-- [x] Live edits widget above the editor
+- [x] Live edits widget above the editor (net agent changes, session baseline)
 - [ ] Two-pane file list and diff layout
 - [ ] Options: `--staged`, `--turn`, path filter
 

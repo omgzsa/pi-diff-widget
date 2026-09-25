@@ -9,6 +9,7 @@ Interactive diff viewer extension for pi.
 - `src/turns.ts` reconstructs per-turn diffs from session data, no git.
 - `src/ui.ts` renders the scrollable overlay.
 - `src/view.ts` defines view models and maps collected data into them.
+- `src/baseline.ts` captures pre-agent file content for the net edits widget.
 - `src/widget.ts` renders the live edits summary above the editor.
 - `test/` behavior tests (`node:test`) for git collection, turns, view models, and the viewer.
 

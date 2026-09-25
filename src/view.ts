@@ -71,26 +71,26 @@ export function countDiffLines(diff: string): {
 }
 
 /**
- * Aggregate per-turn edits per file. Counts are churn: editing one line twice
- * adds +1 and -1 rather than netting out.
+ * Aggregate raw diffs per file. Counts are net when each file appears once,
+ * which is how the baseline widget feeds it.
  */
-export function summarizeEdits(turns: Turn[]): EditSummary {
+export function summarizeDiffs(
+    diffs: Array<{ path: string; diff: string }>,
+): EditSummary {
     const byPath = new Map<string, FileEditSummary>();
 
-    for (const turn of turns) {
-        for (const edit of turn.edits) {
-            const counts = countDiffLines(edit.diff);
-            const existing = byPath.get(edit.path);
-            if (existing) {
-                existing.added += counts.added;
-                existing.removed += counts.removed;
-            } else {
-                byPath.set(edit.path, {
-                    path: edit.path,
-                    added: counts.added,
-                    removed: counts.removed,
-                });
-            }
+    for (const item of diffs) {
+        const counts = countDiffLines(item.diff);
+        const existing = byPath.get(item.path);
+        if (existing) {
+            existing.added += counts.added;
+            existing.removed += counts.removed;
+        } else {
+            byPath.set(item.path, {
+                path: item.path,
+                added: counts.added,
+                removed: counts.removed,
+            });
         }
     }
 
