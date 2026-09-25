@@ -1,5 +1,5 @@
 {
-    "name": "pi-diff",
+    "name": "pi-diff-view",
     "version": "0.0.1",
     "description": "Interactive diff viewer for pi: uncommitted changes and per-turn diffs",
     "keywords": [
@@ -10,10 +10,19 @@
     ],
     "license": "MIT",
     "author": "omgzsa <zselloandras@gmail.com>",
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/omgzsa/pi-diff-review.git"
+    },
+    "homepage": "https://github.com/omgzsa/pi-diff-review#readme",
+    "bugs": {
+        "url": "https://github.com/omgzsa/pi-diff-review/issues"
+    },
     "type": "module",
     "files": [
         "src",
         "README.md",
+        "CHANGELOG.md",
         "LICENSE"
     ],
     "pi": {
@@ -23,10 +32,11 @@
     },
     "scripts": {
         "typecheck": "tsc --noEmit",
-        "test": "node --experimental-strip-types --test test/*.test.ts"
+        "test": "node --experimental-strip-types --test test/*.test.ts",
+        "prepublishOnly": "npm run typecheck && npm test"
     },
     "engines": {
-        "node": ">=20"
+        "node": ">=22.19.0"
     },
     "peerDependencies": {
         "@earendil-works/pi-coding-agent": "*",

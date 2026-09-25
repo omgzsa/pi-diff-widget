@@ -1,4 +1,4 @@
-# pi-diff
+# pi-diff-view
 
 Interactive diff viewer extension for pi.
 

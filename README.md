@@ -1,11 +1,11 @@
-# pi-diff
+# pi-diff-view
 
-Interactive diff viewer for [pi](https://pi.dev). Uncommitted changes now, per-turn diffs next.
+Interactive diff viewer and live edits widget for [pi](https://pi.dev).
 
 ## Install
 
 ```bash
-pi install npm:pi-diff
+pi install npm:pi-diff-view
 # or from a checkout
 pi install /absolute/path/to/pi-diff
 ```
