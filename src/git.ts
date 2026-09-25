@@ -18,7 +18,8 @@ export type FileStatus =
     | 'modified'
     | 'deleted'
     | 'binary'
-    | 'too-large';
+    | 'too-large'
+    | 'unreadable';
 
 export interface DiffFile {
     path: string;
@@ -67,7 +68,8 @@ type WorktreeRead =
     | { kind: 'text'; text: string }
     | { kind: 'missing' }
     | { kind: 'binary' }
-    | { kind: 'too-large' };
+    | { kind: 'too-large' }
+    | { kind: 'unreadable' };
 
 async function readWorktree(absolutePath: string): Promise<WorktreeRead> {
     try {
@@ -75,8 +77,12 @@ async function readWorktree(absolutePath: string): Promise<WorktreeRead> {
         if (buffer.byteLength > MAX_TEXT_BYTES) return { kind: 'too-large' };
         if (buffer.includes(0)) return { kind: 'binary' };
         return { kind: 'text', text: buffer.toString('utf8') };
-    } catch {
-        return { kind: 'missing' };
+    } catch (error) {
+        // Only ENOENT means the file is gone. Anything else is a read failure.
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+            return { kind: 'missing' };
+        }
+        return { kind: 'unreadable' };
     }
 }
 
@@ -137,6 +143,10 @@ export async function collectUncommitted(
         const head = hasHead ? await readHead(exec, cwd, path) : undefined;
         const work = await readWorktree(resolve(cwd, path));
 
+        if (work.kind === 'unreadable') {
+            files.push({ path, status: 'unreadable', diff: '' });
+            continue;
+        }
         if (
             work.kind === 'binary' ||
             (head !== undefined && looksBinary(head))

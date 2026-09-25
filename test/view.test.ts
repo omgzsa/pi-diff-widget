@@ -44,17 +44,16 @@ test('toUncommittedSections maps status, diff, and notes', () => {
 test('toTurnViews drops turns with no edits and maps the rest', () => {
     const turns: Turn[] = [
         {
-            index: 0,
             prompt: 'first prompt\nmore',
             edits: [{ path: 'a.ts', diff: '+1 b' }],
         },
-        { index: 1, prompt: 'no edits here', edits: [] },
-        { index: 2, prompt: '   ', edits: [{ path: 'c.ts', diff: '+1 d' }] },
+        { prompt: 'no edits here', edits: [] },
+        { prompt: '   ', edits: [{ path: 'c.ts', diff: '+1 d' }] },
     ];
     const views = toTurnViews(turns);
 
     assert.equal(views.length, 2);
     assert.equal(views[0]?.label, 'first prompt');
     assert.deepEqual(views[0]?.sections, [{ title: 'a.ts', diff: '+1 b' }]);
-    assert.equal(views[1]?.label, 'prompt 3');
+    assert.equal(views[1]?.label, 'prompt 2');
 });

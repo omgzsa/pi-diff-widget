@@ -27,6 +27,7 @@ export function summarizePrompt(prompt: string): string {
 const NOTE_BY_STATUS: Partial<Record<DiffFile['status'], string>> = {
     binary: 'binary file, no text diff',
     'too-large': 'file too large to diff',
+    unreadable: 'file could not be read',
 };
 
 function fileSection(file: DiffFile): DiffSection {
@@ -45,8 +46,8 @@ export function toUncommittedSections(files: DiffFile[]): DiffSection[] {
 export function toTurnViews(turns: Turn[]): TurnView[] {
     return turns
         .filter((turn) => turn.edits.length > 0)
-        .map((turn) => ({
-            label: summarizePrompt(turn.prompt) || `prompt ${turn.index + 1}`,
+        .map((turn, position) => ({
+            label: summarizePrompt(turn.prompt) || `prompt ${position + 1}`,
             sections: turn.edits.map((edit) => ({
                 title: edit.path,
                 diff: edit.diff,

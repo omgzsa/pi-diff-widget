@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { rm } from 'node:fs/promises';
+import { chmod, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { test } from 'node:test';
 import { collectUncommitted } from '../src/git.ts';
@@ -81,6 +81,24 @@ test('flags files over the text cap as too-large', async (t) => {
     const big = files.find((f) => f.path === 'big.txt');
     assert.equal(big?.status, 'too-large');
     assert.equal(big?.diff, '');
+});
+
+test('flags unreadable files instead of reporting them deleted', async (t) => {
+    if (process.getuid?.() === 0) {
+        t.skip('permission checks do not apply as root');
+        return;
+    }
+
+    const repo = await initRepo();
+    t.after(() => rm(repo, { recursive: true, force: true }));
+
+    await write(repo, 'secret.txt', 'data\n');
+    await chmod(join(repo, 'secret.txt'), 0o000);
+
+    const files = await collectUncommitted(execFn, repo);
+    const secret = files.find((f) => f.path === 'secret.txt');
+    assert.equal(secret?.status, 'unreadable');
+    assert.equal(secret?.diff, '');
 });
 
 test('throws outside a git repository', async (t) => {

@@ -17,7 +17,6 @@ export interface TurnEdit {
 }
 
 export interface Turn {
-    index: number;
     prompt: string;
     edits: TurnEdit[];
 }
@@ -75,7 +74,11 @@ function extractText(content: unknown): string {
 export function createWriteDiffTracker(pi: ExtensionAPI): WriteDiffLookup {
     const pending = new Map<string, { path: string; before?: string }>();
     const diffs = new Map<string, WriteDiff>();
-    const order: string[] = [];
+
+    // A write without a matching result (aborted run) would otherwise linger.
+    pi.on('agent_settled', () => {
+        pending.clear();
+    });
 
     pi.on('tool_call', async (event, ctx) => {
         if (!isToolCallEventType('write', event)) return;
@@ -99,10 +102,10 @@ export function createWriteDiffTracker(pi: ExtensionAPI): WriteDiffLookup {
         if (!diff) return;
 
         diffs.set(event.toolCallId, { path: snapshot.path, diff });
-        order.push(event.toolCallId);
-        if (order.length > MAX_TRACKED_WRITES) {
-            const oldest = order.shift();
-            if (oldest !== undefined) diffs.delete(oldest);
+        while (diffs.size > MAX_TRACKED_WRITES) {
+            const oldest = diffs.keys().next().value;
+            if (oldest === undefined) break;
+            diffs.delete(oldest);
         }
     });
 
@@ -138,7 +141,6 @@ export function collectTurns(
 
         if (message.role === 'user') {
             current = {
-                index: turns.length,
                 prompt: extractText(message.content),
                 edits: [],
             };
