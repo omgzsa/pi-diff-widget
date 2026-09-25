@@ -4,6 +4,18 @@ Known gaps and planned work, roughly ordered. Nothing here blocks a release.
 
 ## Next
 
+### Per-file accept and reject
+
+`/diff-widget accept <path>` and `/diff-widget reject <path>`, matching a tracked
+file by relative path, with argument completions from the tracked files. No path
+keeps the current all-or-nothing behavior.
+
+Where: `src/summary.ts` gains filtered `rebaselinePaths` and `revertPaths`; the
+existing all-files versions become the no-filter case. `src/widget.ts` parses the
+path argument. Later: `a` and `d` keys in the `/diff` overlay, which needs a
+mapping from a section back to its baseline path, since in the turns view a
+section is an edit rather than a file.
+
 ### `/diff` options
 
 `/diff --staged` for staged-only changes, `--worktree` for unstaged-only, and a
