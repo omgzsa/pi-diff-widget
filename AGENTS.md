@@ -12,6 +12,7 @@ Interactive diff viewer extension for pi.
 - `src/baseline.ts` captures pre-agent file content for the net edits widget.
 - `src/widget.ts` renders the live edits summary above the editor.
 - `test/` behavior tests (`node:test`) for git collection, turns, view models, and the viewer.
+- `ROADMAP.md` planned work and known gaps; check it before starting new work.
 
 ## Dev
 

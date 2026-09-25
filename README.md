@@ -66,9 +66,9 @@ panel until the agent edits again, the equivalent of Zed's Keep All.
 - [x] Uncommitted changes (`git diff HEAD` plus untracked files)
 - [x] Per-turn diffs grouped by prompt, reconstructed from session edit results
 - [x] `write`-tool before/after snapshots, persisted per turn
-- [x] Live edits widget above the editor (net agent changes, session baseline)
-- [ ] Two-pane file list and diff layout
-- [ ] Options: `--staged`, `--turn`, path filter
+- [x] Live net edits widget above the editor, with `/diff-widget on|off|reset`
+
+See [ROADMAP.md](./ROADMAP.md) for planned work and known gaps.
 
 ## How it works
 
