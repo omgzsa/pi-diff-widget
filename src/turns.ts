@@ -8,6 +8,7 @@ import {
 import type {
     ExtensionAPI,
     ExtensionContext,
+    SessionEntry,
 } from '@earendil-works/pi-coding-agent';
 
 export interface TurnEdit {
@@ -24,6 +25,13 @@ export interface Turn {
 export interface WriteDiff {
     path: string;
     diff: string;
+}
+
+/** Session entry type used to persist write diffs across reloads. */
+export const WRITE_DIFF_ENTRY = 'pi-diff:writes';
+
+export interface WriteDiffRecord extends WriteDiff {
+    toolCallId: string;
 }
 
 /** Maps a `write` tool call id to the diff its execution produced. */
@@ -69,15 +77,33 @@ function extractText(content: unknown): string {
 
 /**
  * `write` results carry no diff, so snapshot the old content and synthesize one
- * after the write, keyed by tool call id. In-memory: lost on session reload.
+ * after the write, keyed by tool call id. Diffs are persisted per turn.
  */
 export function createWriteDiffTracker(pi: ExtensionAPI): WriteDiffLookup {
     const pending = new Map<string, { path: string; before?: string }>();
     const diffs = new Map<string, WriteDiff>();
+    let unflushed: string[] = [];
 
-    // A write without a matching result (aborted run) would otherwise linger.
+    const flush = () => {
+        if (unflushed.length === 0) return;
+        const records: WriteDiffRecord[] = [];
+        for (const toolCallId of unflushed) {
+            const diff = diffs.get(toolCallId);
+            if (diff) records.push({ toolCallId, ...diff });
+        }
+        unflushed = [];
+        if (records.length > 0) {
+            pi.appendEntry(WRITE_DIFF_ENTRY, { diffs: records });
+        }
+    };
+
+    // Persist at turn boundaries so write diffs survive a session reload. At
+    // turn_end no tool result is in flight, so it is safe to append an entry.
+    pi.on('turn_end', flush);
     pi.on('agent_settled', () => {
+        // A write without a matching result (aborted run) would otherwise linger.
         pending.clear();
+        flush();
     });
 
     pi.on('tool_call', async (event, ctx) => {
@@ -102,6 +128,7 @@ export function createWriteDiffTracker(pi: ExtensionAPI): WriteDiffLookup {
         if (!diff) return;
 
         diffs.set(event.toolCallId, { path: snapshot.path, diff });
+        unflushed.push(event.toolCallId);
         while (diffs.size > MAX_TRACKED_WRITES) {
             const oldest = diffs.keys().next().value;
             if (oldest === undefined) break;
@@ -110,6 +137,26 @@ export function createWriteDiffTracker(pi: ExtensionAPI): WriteDiffLookup {
     });
 
     return (toolCallId) => diffs.get(toolCallId);
+}
+
+/** Collect write diffs persisted by past turns. */
+function readPersistedWrites(branch: SessionEntry[]): Map<string, WriteDiff> {
+    const writes = new Map<string, WriteDiff>();
+    for (const entry of branch) {
+        if (entry.type !== 'custom' || entry.customType !== WRITE_DIFF_ENTRY) {
+            continue;
+        }
+        const records = (entry.data as { diffs?: WriteDiffRecord[] } | undefined)
+            ?.diffs;
+        if (!Array.isArray(records)) continue;
+        for (const record of records) {
+            writes.set(record.toolCallId, {
+                path: record.path,
+                diff: record.diff,
+            });
+        }
+    }
+    return writes;
 }
 
 /**
@@ -121,6 +168,7 @@ export function collectTurns(
     lookupWrite: WriteDiffLookup,
 ): Turn[] {
     const branch = session.getBranch();
+    const persistedWrites = readPersistedWrites(branch);
 
     const callArguments = new Map<string, Record<string, unknown>>();
     for (const entry of branch) {
@@ -161,7 +209,9 @@ export function collectTurns(
         }
 
         if (message.toolName === 'write') {
-            const tracked = lookupWrite(message.toolCallId);
+            const tracked =
+                lookupWrite(message.toolCallId) ??
+                persistedWrites.get(message.toolCallId);
             if (tracked)
                 current?.edits.push({ path: tracked.path, diff: tracked.diff });
         }

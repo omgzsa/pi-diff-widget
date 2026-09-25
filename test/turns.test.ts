@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { SessionEntry } from '@earendil-works/pi-coding-agent';
 import {
+    WRITE_DIFF_ENTRY,
     collectTurns,
     type SessionBranchSource,
     type WriteDiffLookup,
@@ -133,4 +134,50 @@ test('keeps only the last 100 turns', () => {
     assert.equal(turns.length, 100);
     assert.equal(turns[0]?.prompt, 'prompt 5');
     assert.equal(turns[99]?.prompt, 'prompt 104');
+});
+
+function persistedEntry(diffs: Array<{ toolCallId: string; path: string; diff: string }>) {
+    return {
+        type: 'custom',
+        id: 'x1',
+        parentId: null,
+        customType: WRITE_DIFF_ENTRY,
+        data: { diffs },
+    };
+}
+
+test('uses write diffs persisted by past turns', () => {
+    const entries = [
+        userMessage('prompt'),
+        assistantWithCalls([
+            { id: 'c1', name: 'write', args: { path: 'src/b.ts' } },
+        ]),
+        toolResult('t1', 'c1', 'write', undefined),
+        persistedEntry([
+            { toolCallId: 'c1', path: 'src/b.ts', diff: '+1 persisted' },
+        ]),
+    ];
+
+    const turns = collectTurns(fakeSession(entries), () => undefined);
+    assert.equal(turns[0]?.edits[0]?.diff, '+1 persisted');
+});
+
+test('prefers the live lookup over persisted data', () => {
+    const entries = [
+        userMessage('prompt'),
+        assistantWithCalls([
+            { id: 'c1', name: 'write', args: { path: 'src/b.ts' } },
+        ]),
+        toolResult('t1', 'c1', 'write', undefined),
+        persistedEntry([
+            { toolCallId: 'c1', path: 'src/b.ts', diff: '+1 persisted' },
+        ]),
+    ];
+
+    const lookup: WriteDiffLookup = () => ({
+        path: 'src/b.ts',
+        diff: '+1 live',
+    });
+    const turns = collectTurns(fakeSession(entries), lookup);
+    assert.equal(turns[0]?.edits[0]?.diff, '+1 live');
 });

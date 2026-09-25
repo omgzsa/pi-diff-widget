@@ -40,8 +40,7 @@ Keys:
 
 - [x] Uncommitted changes (`git diff HEAD` plus untracked files)
 - [x] Per-turn diffs grouped by prompt, reconstructed from session edit results
-- [x] `write`-tool before/after snapshots
-- [ ] Persist write snapshots so they survive session reload
+- [x] `write`-tool before/after snapshots, persisted per turn
 - [ ] Two-pane file list and diff layout
 - [ ] Options: `--staged`, `--turn`, path filter
 
@@ -51,8 +50,9 @@ Keys:
   `generateDiffString` and `renderDiff`. No third-party diff library.
 - Per-turn diffs read pi's session data. The `edit` tool persists `details.diff`
   per call, so reconstruction needs no git and works outside a repo. The `write`
-  tool stores no diff, so a `tool_call` handler snapshots the old content and
-  synthesizes one. Write snapshots are in-memory for now.
+  tool stores no diff, so a `tool_call` handler snapshots the old content,
+  synthesizes one on `tool_result`, and appends it to the session at `turn_end`.
+  Write diffs therefore survive reload, same as edit diffs.
 
 ## Development
 
