@@ -1,10 +1,19 @@
 import { mkdir, unlink, writeFile } from 'node:fs/promises';
 import { dirname, relative } from 'node:path';
 import { generateDiffString } from '@earendil-works/pi-coding-agent';
-import { readFileCapped, type BaselineTracker } from './baseline.ts';
+import { readFileCapped, locationGone, type BaselineTracker } from './baseline.ts';
 import { listDirtyPaths } from './git.ts';
 import type { ExecFn } from './exec.ts';
 import { summarizeDiffs, type EditSummary } from './view.ts';
+
+/**
+ * Current content for a tracked path, or undefined when it cannot be accounted
+ * for: too large, unreadable, or its whole location is gone.
+ */
+async function readCurrent(absolute: string): Promise<string | undefined> {
+    if (await locationGone(absolute)) return undefined;
+    return readFileCapped(absolute);
+}
 
 /**
  * Net agent changes: for each file the agent touched, diff its current content
@@ -17,8 +26,8 @@ export async function computeNetSummary(
     const diffs: Array<{ path: string; diff: string }> = [];
 
     for (const absolute of baselines.paths()) {
-        const current = await readFileCapped(absolute);
-        if (current === undefined) continue; // too large or unreadable
+        const current = await readCurrent(absolute);
+        if (current === undefined) continue;
         const baseline = baselines.get(absolute) ?? '';
         const { diff } = generateDiffString(baseline, current);
         if (!diff) continue;
@@ -44,7 +53,7 @@ export async function collectRevertTargets(
 ): Promise<RevertTarget[]> {
     const targets: RevertTarget[] = [];
     for (const absolute of baselines.paths()) {
-        const current = await readFileCapped(absolute);
+        const current = await readCurrent(absolute);
         if (current === undefined) continue;
         const baseline = baselines.get(absolute) ?? '';
         const { diff } = generateDiffString(baseline, current);
@@ -84,6 +93,14 @@ export async function pruneCleanBaselines(
     exec: ExecFn,
     cwd: string,
 ): Promise<void> {
+    // A baseline whose location is gone can never be shown or reverted again,
+    // and keeping it would let reject rebuild a directory that was moved away.
+    const live = new Set<string>();
+    for (const absolute of baselines.paths()) {
+        if (!(await locationGone(absolute))) live.add(absolute);
+    }
+    baselines.retain((absolute) => live.has(absolute));
+
     let dirty: Set<string> | undefined;
     try {
         dirty = await listDirtyPaths(exec, cwd);

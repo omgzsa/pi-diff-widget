@@ -1,7 +1,10 @@
 import { readFile, stat } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 import { isToolCallEventType } from '@earendil-works/pi-coding-agent';
-import type { ExtensionAPI, SessionEntry } from '@earendil-works/pi-coding-agent';
+import type {
+    ExtensionAPI,
+    SessionEntry,
+} from '@earendil-works/pi-coding-agent';
 
 export const BASELINE_ENTRY = 'pi-diff:baselines';
 const MAX_BASELINE_BYTES = 256 * 1024;
@@ -41,6 +44,16 @@ export async function readFileCapped(
     maxBytes = MAX_BASELINE_BYTES,
 ): Promise<string | undefined> {
     return (await readBaseline(path, maxBytes))?.content;
+}
+
+/**
+ * True when the path's parent directory is gone. A tracked path whose location
+ * no longer exists; the checkout moved or was removed, so its baseline must
+ * not read as a deletion.
+ */
+export async function locationGone(path: string): Promise<boolean> {
+    const info = await stat(dirname(path)).catch(() => undefined);
+    return info?.isDirectory() !== true;
 }
 
 /**
@@ -121,7 +134,10 @@ export class BaselineTracker {
 
     load(branch: SessionEntry[]): void {
         for (const entry of branch) {
-            if (entry.type !== 'custom' || entry.customType !== BASELINE_ENTRY) {
+            if (
+                entry.type !== 'custom' ||
+                entry.customType !== BASELINE_ENTRY
+            ) {
                 continue;
             }
             const records = (

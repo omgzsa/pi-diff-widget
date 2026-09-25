@@ -74,6 +74,33 @@ test('a new file gets an empty baseline and reads as all added', async (t) => {
     assert.equal(summary.files[0]?.removed, 0);
 });
 
+test('a deleted file reads as a full deletion while its directory exists', async (t) => {
+    const dir = await makeTempDir('pi-diff-net-');
+    t.after(() => rm(dir, { recursive: true, force: true }));
+
+    await write(dir, 'a.ts', 'one\ntwo\n');
+    const baselines = new BaselineTracker();
+    await baselines.capture(dir, 'a.ts');
+    await rm(join(dir, 'a.ts'));
+
+    const summary = await computeNetSummary(baselines, dir);
+    assert.equal(summary.files[0]?.added, 0);
+    assert.equal(summary.files[0]?.removed, 2);
+});
+
+test('a file whose directory is gone is not a net change', async (t) => {
+    const dir = await makeTempDir('pi-diff-net-');
+    t.after(() => rm(dir, { recursive: true, force: true }));
+
+    await write(dir, 'sub/a.ts', 'one\ntwo\n');
+    const baselines = new BaselineTracker();
+    await baselines.capture(dir, 'sub/a.ts');
+    await rm(join(dir, 'sub'), { recursive: true });
+
+    assert.equal((await computeNetSummary(baselines, dir)).fileCount, 0);
+    assert.deepEqual(await collectRevertTargets(baselines, dir), []);
+});
+
 test('accept re-baselines so the summary drops to zero', async (t) => {
     const dir = await makeTempDir('pi-diff-net-');
     t.after(() => rm(dir, { recursive: true, force: true }));
@@ -108,6 +135,20 @@ test('committing a file drops it from the widget inputs', async (t) => {
 
     assert.deepEqual(baselines.paths(), []);
     assert.equal((await computeNetSummary(baselines, repo)).fileCount, 0);
+});
+
+test('prune drops baselines whose directory is gone', async (t) => {
+    const dir = await makeTempDir('pi-diff-prune-');
+    t.after(() => rm(dir, { recursive: true, force: true }));
+
+    await write(dir, 'sub/a.ts', 'one\n');
+    const baselines = new BaselineTracker();
+    await baselines.capture(dir, 'sub/a.ts');
+    await rm(join(dir, 'sub'), { recursive: true });
+
+    await pruneCleanBaselines(baselines, execFn, dir);
+
+    assert.deepEqual(baselines.paths(), []);
 });
 
 test('reject restores a modified file to its baseline', async (t) => {
