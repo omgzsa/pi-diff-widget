@@ -8,7 +8,7 @@ export interface DiffSection {
     diff?: string;
     note?: string;
 }
-
+// TEST LINE FOR DIFF
 export interface TurnView {
     label: string;
     sections: DiffSection[];
@@ -41,6 +41,68 @@ function fileSection(file: DiffFile): DiffSection {
 
 export function toUncommittedSections(files: DiffFile[]): DiffSection[] {
     return files.map((file) => fileSection(file));
+}
+
+export interface FileEditSummary {
+    path: string;
+    added: number;
+    removed: number;
+}
+
+export interface EditSummary {
+    fileCount: number;
+    added: number;
+    removed: number;
+    files: FileEditSummary[];
+}
+
+/** Count `+` and `-` lines in a raw display diff. `...` separators are ignored. */
+export function countDiffLines(diff: string): {
+    added: number;
+    removed: number;
+} {
+    let added = 0;
+    let removed = 0;
+    for (const line of diff.split('\n')) {
+        if (line.startsWith('+')) added += 1;
+        else if (line.startsWith('-')) removed += 1;
+    }
+    return { added, removed };
+}
+
+/**
+ * Aggregate per-turn edits per file. Counts are churn: editing one line twice
+ * adds +1 and -1 rather than netting out.
+ */
+export function summarizeEdits(turns: Turn[]): EditSummary {
+    const byPath = new Map<string, FileEditSummary>();
+
+    for (const turn of turns) {
+        for (const edit of turn.edits) {
+            const counts = countDiffLines(edit.diff);
+            const existing = byPath.get(edit.path);
+            if (existing) {
+                existing.added += counts.added;
+                existing.removed += counts.removed;
+            } else {
+                byPath.set(edit.path, {
+                    path: edit.path,
+                    added: counts.added,
+                    removed: counts.removed,
+                });
+            }
+        }
+    }
+
+    const files = [...byPath.values()].sort((a, b) =>
+        a.path.localeCompare(b.path),
+    );
+    return {
+        fileCount: files.length,
+        added: files.reduce((sum, file) => sum + file.added, 0),
+        removed: files.reduce((sum, file) => sum + file.removed, 0),
+        files,
+    };
 }
 
 export function toTurnViews(turns: Turn[]): TurnView[] {

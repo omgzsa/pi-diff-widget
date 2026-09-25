@@ -1,10 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { generateDiffString } from '@earendil-works/pi-coding-agent';
-import type {
-    ExecOptions,
-    ExecResult,
-} from '@earendil-works/pi-coding-agent';
+import type { ExecOptions, ExecResult } from '@earendil-works/pi-coding-agent';
 
 /** The subset of `ExtensionAPI` the git reader needs. */
 export type ExecFn = (
@@ -28,6 +25,7 @@ export interface DiffFile {
     diff: string;
 }
 
+// DIFF VIEWER CHECK (git.ts): temporary marker, safe to remove.
 const MAX_TEXT_BYTES = 512 * 1024;
 const MAX_DIFF_LINES = 4000;
 

@@ -2,16 +2,15 @@ import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { collectUncommitted, type DiffFile, type ExecFn } from './git.ts';
 import { collectTurns, createWriteDiffTracker } from './turns.ts';
 import { DiffViewer } from './ui.ts';
-import {
-    toTurnViews,
-    toUncommittedSections,
-    type ViewMode,
-} from './view.ts';
+import { toTurnViews, toUncommittedSections, type ViewMode } from './view.ts';
+import { registerDiffWidget } from './widget.ts';
 
 export default function (pi: ExtensionAPI) {
     const lookupWrite = createWriteDiffTracker(pi);
     const exec: ExecFn = (command, args, options) =>
         pi.exec(command, args, options);
+
+    registerDiffWidget(pi, lookupWrite);
 
     pi.registerCommand('diff', {
         description:

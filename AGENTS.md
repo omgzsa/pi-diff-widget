@@ -9,6 +9,7 @@ Interactive diff viewer extension for pi.
 - `src/turns.ts` reconstructs per-turn diffs from session data, no git.
 - `src/ui.ts` renders the scrollable overlay.
 - `src/view.ts` defines view models and maps collected data into them.
+- `src/widget.ts` renders the live edits summary above the editor.
 - `test/` behavior tests (`node:test`) for git collection, turns, view models, and the viewer.
 
 ## Dev
@@ -26,4 +27,6 @@ pi -e ./src/index.ts # then run /diff
   bundled pi packages in `peerDependencies` with `"*"`. Never bundle them.
 - Reuse pi's `renderDiff` and `generateDiffString`. Do not add a diff library.
 - Relative imports use the `.ts` extension.
+- Tests run with Node strip-only mode, so avoid non-erasable syntax (parameter
+  properties, enums, namespaces). `erasableSyntaxOnly` in tsconfig enforces this.
 - Per-turn diffs must not require git. Git is only for uncommitted changes.

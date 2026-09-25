@@ -4,8 +4,11 @@ import type { DiffFile } from '../src/git.ts';
 import type { Turn } from '../src/turns.ts';
 import {
     summarizePrompt,
+    countDiffLines,
+    summarizeEdits,
     toTurnViews,
     toUncommittedSections,
+    type EditSummary,
 } from '../src/view.ts';
 
 test('summarizePrompt uses the first non-empty line, trimmed', () => {
@@ -56,4 +59,36 @@ test('toTurnViews drops turns with no edits and maps the rest', () => {
     assert.equal(views[0]?.label, 'first prompt');
     assert.deepEqual(views[0]?.sections, [{ title: 'a.ts', diff: '+1 b' }]);
     assert.equal(views[1]?.label, 'prompt 2');
+});
+
+test('countDiffLines counts added and removed lines, ignoring separators', () => {
+    assert.deepEqual(countDiffLines('  1 a\n+2 b\n-1 c\n+3 d\n    ...'), {
+        added: 2,
+        removed: 1,
+    });
+});
+
+test('summarizeEdits aggregates per file across turns', () => {
+    const turns: Turn[] = [
+        {
+            prompt: 'a',
+            edits: [
+                { path: 'b.ts', diff: '+1 x' },
+                { path: 'a.ts', diff: '+1 y' },
+            ],
+        },
+        {
+            prompt: 'b',
+            edits: [{ path: 'b.ts', diff: '+1 z\n-1 q' }],
+        },
+    ];
+    const summary: EditSummary = summarizeEdits(turns);
+
+    assert.equal(summary.fileCount, 2);
+    assert.equal(summary.added, 3);
+    assert.equal(summary.removed, 1);
+    assert.deepEqual(summary.files, [
+        { path: 'a.ts', added: 1, removed: 0 },
+        { path: 'b.ts', added: 2, removed: 1 },
+    ]);
 });

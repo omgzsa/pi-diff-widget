@@ -36,11 +36,27 @@ Keys:
 - `g` / `G`: jump to top / bottom
 - `q` / `Esc`: close
 
+## Live edits widget
+
+Above the editor, pi-diff shows a live summary of the files the agent changed
+this session, refreshed at each turn boundary:
+
+```
+edits · 3 files · +3 -0
+src/git.ts      +1 -0
+src/index.ts    +1 -0
+src/ui.ts       +1 -0
+```
+
+It hides itself when the session has no edits. Toggle it with `/diff-widget`.
+Counts are churn, not net: editing the same line twice reports `+1 -1`.
+
 ## Status
 
 - [x] Uncommitted changes (`git diff HEAD` plus untracked files)
 - [x] Per-turn diffs grouped by prompt, reconstructed from session edit results
 - [x] `write`-tool before/after snapshots, persisted per turn
+- [x] Live edits widget above the editor
 - [ ] Two-pane file list and diff layout
 - [ ] Options: `--staged`, `--turn`, path filter
 
