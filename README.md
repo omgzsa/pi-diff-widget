@@ -6,7 +6,9 @@ Interactive diff viewer and live edits widget for [pi](https://pi.dev).
 
 ```bash
 pi install npm:pi-diff-widget
-# or from a checkout
+# straight from the repo, no npm required
+pi install git:github.com/omgzsa/pi-diff-widget
+# or from a local checkout
 pi install /absolute/path/to/pi-diff
 ```
 
