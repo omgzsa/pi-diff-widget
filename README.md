@@ -53,9 +53,9 @@ src/ui.ts       +1 -0
 For each file the agent touches, pi-diff records the content before the first
 touch and diffs it against the current content. Reverted files drop out and the
 counts are net, so it shows what the agent has actually changed, not cumulative
-churn. It is independent of git: committing does not reset it. Paths are shown
-relative to the working directory. Baselines live in the session, capped at
-256 KB per file.
+churn. Committing a file drops it from the panel automatically, so what remains
+is the agent's work that is not yet committed. Paths are shown relative to the
+working directory. Baselines live in the session, capped at 256 KB per file.
 
 It hides itself when nothing differs. `/diff-widget` toggles it, and
 `/diff-widget accept` (alias `keep`) makes the current state the new baseline and

@@ -1,6 +1,6 @@
 {
     "name": "pi-diff-widget",
-    "version": "0.0.3",
+    "version": "0.0.4",
     "description": "Interactive diff viewer for pi: uncommitted changes and per-turn diffs",
     "keywords": [
         "pi-package",

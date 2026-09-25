@@ -82,21 +82,22 @@ async function readWorktree(absolutePath: string): Promise<WorktreeRead> {
     }
 }
 
-/**
- * Read every uncommitted change in `cwd`: staged and unstaged tracked edits,
- * plus untracked files. Uses `--no-renames` so renames arrive as a delete plus
- * an add, which keeps content diffing simple.
- */
-export async function collectUncommitted(
+interface ChangedPaths {
+    hasHead: boolean;
+    paths: Set<string>;
+}
+
+/** Changed paths relative to `cwd`, or undefined when not in a git repository. */
+async function collectChangedPaths(
     exec: ExecFn,
     cwd: string,
-): Promise<DiffFile[]> {
+): Promise<ChangedPaths | undefined> {
     const insideRepo = await runGit(exec, cwd, [
         'rev-parse',
         '--is-inside-work-tree',
     ]);
     if (insideRepo.code !== 0 || insideRepo.stdout.trim() !== 'true') {
-        throw new Error('not a git repository');
+        return undefined;
     }
 
     const hasHead =
@@ -133,6 +134,35 @@ export async function collectUncommitted(
         ]);
         for (const path of splitNul(all.stdout)) paths.add(path);
     }
+
+    return { hasHead, paths };
+}
+
+/**
+ * Relative paths with uncommitted changes, or undefined when `cwd` is not a git
+ * repository. Cheaper than `collectUncommitted`: it reads no file contents.
+ */
+export async function listDirtyPaths(
+    exec: ExecFn,
+    cwd: string,
+): Promise<Set<string> | undefined> {
+    return (await collectChangedPaths(exec, cwd))?.paths;
+}
+
+/**
+ * Read every uncommitted change in `cwd`: staged and unstaged tracked edits,
+ * plus untracked files. Uses `--no-renames` so renames arrive as a delete plus
+ * an add, which keeps content diffing simple.
+ */
+export async function collectUncommitted(
+    exec: ExecFn,
+    cwd: string,
+): Promise<DiffFile[]> {
+    const changed = await collectChangedPaths(exec, cwd);
+    if (!changed) {
+        throw new Error('not a git repository');
+    }
+    const { hasHead, paths } = changed;
 
     const files: DiffFile[] = [];
     for (const path of [...paths].sort()) {

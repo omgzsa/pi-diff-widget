@@ -12,7 +12,7 @@ export default function (pi: ExtensionAPI) {
     const exec: ExecFn = (command, args, options) =>
         pi.exec(command, args, options);
 
-    registerDiffWidget(pi, baselines);
+    registerDiffWidget(pi, baselines, exec);
 
     pi.registerCommand('diff', {
         description:

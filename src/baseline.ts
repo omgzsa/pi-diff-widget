@@ -61,6 +61,13 @@ export class BaselineTracker {
         this.flush(pi);
     }
 
+    /** Drop baselines whose absolute path fails the predicate. */
+    retain(keep: (path: string) => boolean): void {
+        for (const path of [...this.baselines.keys()]) {
+            if (!keep(path)) this.baselines.delete(path);
+        }
+    }
+
     flush(pi: ExtensionAPI): void {
         if (this.unflushed.size === 0) return;
         const records: BaselineRecord[] = [];

@@ -85,3 +85,17 @@ test('load keeps the latest baseline for a path', () => {
     restored.load([entry('first'), entry('second')]);
     assert.equal(restored.get('/tmp/a.ts'), 'second');
 });
+
+test('retain drops baselines that fail the predicate', async (t) => {
+    const dir = await makeTempDir('pi-diff-baseline-');
+    t.after(() => rm(dir, { recursive: true, force: true }));
+
+    await write(dir, 'a.ts', 'a\n');
+    await write(dir, 'b.ts', 'b\n');
+    const baselines = new BaselineTracker();
+    await baselines.capture(dir, 'a.ts');
+    await baselines.capture(dir, 'b.ts');
+
+    baselines.retain((path) => path.endsWith('a.ts'));
+    assert.deepEqual(baselines.paths(), [`${dir}/a.ts`]);
+});

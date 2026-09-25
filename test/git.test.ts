@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { chmod, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { collectUncommitted } from '../src/git.ts';
+import { collectUncommitted, listDirtyPaths } from '../src/git.ts';
 import {
     commitAll,
     execFn,
@@ -109,4 +109,34 @@ test('throws outside a git repository', async (t) => {
         () => collectUncommitted(execFn, dir),
         /not a git repository/,
     );
+});
+
+test('listDirtyPaths reports changed and untracked paths', async (t) => {
+    const repo = await initRepo();
+    t.after(() => rm(repo, { recursive: true, force: true }));
+
+    await write(repo, 'keep.txt', 'a\n');
+    await commitAll(repo, 'init');
+    await write(repo, 'keep.txt', 'b\n');
+    await write(repo, 'new.txt', 'n\n');
+
+    const dirty = await listDirtyPaths(execFn, repo);
+    assert.deepEqual([...(dirty ?? [])].sort(), ['keep.txt', 'new.txt']);
+});
+
+test('listDirtyPaths is empty for a clean tree', async (t) => {
+    const repo = await initRepo();
+    t.after(() => rm(repo, { recursive: true, force: true }));
+
+    await write(repo, 'a.txt', 'a\n');
+    await commitAll(repo, 'init');
+
+    assert.equal((await listDirtyPaths(execFn, repo))?.size, 0);
+});
+
+test('listDirtyPaths returns undefined outside a git repo', async (t) => {
+    const dir = await makeTempDir('pi-diff-nogit-');
+    t.after(() => rm(dir, { recursive: true, force: true }));
+
+    assert.equal(await listDirtyPaths(execFn, dir), undefined);
 });

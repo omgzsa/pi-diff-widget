@@ -8,6 +8,7 @@ import type {
 } from '@earendil-works/pi-coding-agent';
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import { readFileCapped, type BaselineTracker } from './baseline.ts';
+import { listDirtyPaths, type ExecFn } from './git.ts';
 import type { DocumentTheme } from './ui.ts';
 import { summarizeDiffs, type EditSummary } from './view.ts';
 
@@ -88,17 +89,43 @@ class EditSummaryWidget implements Component {
 }
 
 /**
+ * Drop files that no longer have uncommitted changes, so committing clears the
+ * panel. Files outside the repository, or sessions outside git, are kept.
+ */
+export async function pruneCleanBaselines(
+    baselines: BaselineTracker,
+    exec: ExecFn,
+    cwd: string,
+): Promise<void> {
+    let dirty: Set<string> | undefined;
+    try {
+        dirty = await listDirtyPaths(exec, cwd);
+    } catch {
+        return;
+    }
+    if (!dirty) return;
+
+    baselines.retain((absolute) => {
+        const rel = relative(cwd, absolute);
+        if (rel.startsWith('..')) return true; // outside the repo, cannot judge
+        return dirty.has(rel);
+    });
+}
+
+/**
  * Show net agent edits above the editor, refreshed at turn boundaries. Hidden
- * when nothing differs from the session baselines.
+ * when nothing differs from the session baselines, or everything is committed.
  */
 export function registerDiffWidget(
     pi: ExtensionAPI,
     baselines: BaselineTracker,
+    exec: ExecFn,
 ): void {
     let visible = true;
 
     const update = async (ctx: ExtensionContext) => {
         if (!ctx.hasUI) return;
+        await pruneCleanBaselines(baselines, exec, ctx.cwd);
         if (!visible) {
             ctx.ui.setWidget(WIDGET_KEY, undefined);
             return;

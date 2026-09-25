@@ -3,8 +3,8 @@ import { rm } from 'node:fs/promises';
 import { test } from 'node:test';
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { BaselineTracker, readFileCapped } from '../src/baseline.ts';
-import { computeNetSummary } from '../src/widget.ts';
-import { makeTempDir, write } from './support.ts';
+import { computeNetSummary, pruneCleanBaselines } from '../src/widget.ts';
+import { commitAll, execFn, initRepo, makeTempDir, write } from './support.ts';
 
 test('net summary diffs current content against the baseline', async (t) => {
     const dir = await makeTempDir('pi-diff-net-');
@@ -85,8 +85,26 @@ test('accept re-baselines so the summary drops to zero', async (t) => {
     assert.equal((await computeNetSummary(baselines, dir)).fileCount, 0);
 });
 
-test('readFileCapped returns undefined for oversized files', async (t) => {
-    const dir = await makeTempDir('pi-diff-net-');
+test('committing a file drops it from the widget inputs', async (t) => {
+    const repo = await initRepo();
+    t.after(() => rm(repo, { recursive: true, force: true }));
+
+    await write(repo, 'a.ts', 'one\n');
+    await commitAll(repo, 'init');
+
+    const baselines = new BaselineTracker();
+    await baselines.capture(repo, 'a.ts');
+    await write(repo, 'a.ts', 'two\n');
+    assert.equal((await computeNetSummary(baselines, repo)).fileCount, 1);
+
+    await commitAll(repo, 'change');
+    await pruneCleanBaselines(baselines, execFn, repo);
+
+    assert.deepEqual(baselines.paths(), []);
+    assert.equal((await computeNetSummary(baselines, repo)).fileCount, 0);
+});
+
+test('readFileCapped returns undefined for oversized files', async (t) => {    const dir = await makeTempDir('pi-diff-net-');
     t.after(() => rm(dir, { recursive: true, force: true }));
 
     await write(dir, 'big.txt', 'x'.repeat(64));
