@@ -25,9 +25,7 @@ export interface DiffFile {
     diff: string;
 }
 
-// DIFF VIEWER CHECK (git.ts): temporary marker, safe to remove.
-const MAX_TEXT_BYTES = 512 * 1024;
-const MAX_DIFF_LINES = 4000;
+const MAX_TEXT_BYTES = 512 * 1024;const MAX_DIFF_LINES = 4000;
 
 function splitNul(value: string): string[] {
     return value.split('\0').filter((part) => part.length > 0);

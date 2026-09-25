@@ -187,7 +187,6 @@ export class DiffViewer implements Component {
         this.tui.requestRender();
     }
 
-    // DIFF VIEWER CHECK (ui.ts): temporary marker, safe to remove.
     render(width: number): string[] {
         const height = Math.max(6, this.tui.terminal.rows - 1);
         this.viewportHeight = Math.max(1, height - 2);
