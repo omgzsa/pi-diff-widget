@@ -126,14 +126,14 @@ export function registerDiffWidget(
 
     pi.registerCommand('diff-widget', {
         description:
-            'Toggle the live edits widget: on, off, or reset (accept current state)',
+            'Toggle the live edits widget: on, off, or accept (keep current state)',
         handler: async (args, ctx) => {
             const action = args.trim().toLowerCase();
 
-            if (action === 'reset') {
-                await baselines.reset(pi);
+            if (action === 'accept' || action === 'keep') {
+                await baselines.rebaseline(pi);
                 await update(ctx);
-                ctx.ui.notify('Edits widget reset', 'info');
+                ctx.ui.notify('Edits accepted', 'info');
                 return;
             }
 

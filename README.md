@@ -58,15 +58,15 @@ relative to the working directory. Baselines live in the session, capped at
 256 KB per file.
 
 It hides itself when nothing differs. `/diff-widget` toggles it, and
-`/diff-widget reset` accepts the current state as the new baseline and clears the
-panel until the agent edits again, the equivalent of Zed's Keep All.
+`/diff-widget accept` (alias `keep`) makes the current state the new baseline and
+clears the panel until the agent edits again, the equivalent of Zed's Keep All.
 
 ## Status
 
 - [x] Uncommitted changes (`git diff HEAD` plus untracked files)
 - [x] Per-turn diffs grouped by prompt, reconstructed from session edit results
 - [x] `write`-tool before/after snapshots, persisted per turn
-- [x] Live net edits widget above the editor, with `/diff-widget on|off|reset`
+- [x] Live net edits widget above the editor, with `/diff-widget on|off|accept`
 
 See [ROADMAP.md](./ROADMAP.md) for planned work and known gaps.
 

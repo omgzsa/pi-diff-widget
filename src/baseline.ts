@@ -51,7 +51,7 @@ export class BaselineTracker {
     }
 
     /** Accept current content as the new baseline, so net changes drop to zero. */
-    async reset(pi: ExtensionAPI): Promise<void> {
+    async rebaseline(pi: ExtensionAPI): Promise<void> {
         for (const path of [...this.baselines.keys()]) {
             const content = await readFileCapped(path);
             if (content === undefined) continue;
@@ -84,7 +84,7 @@ export class BaselineTracker {
             )?.baselines;
             if (!Array.isArray(records)) continue;
             for (const record of records) {
-                // Later entries win, so a reset can re-baseline a path.
+                // Later entries win, so accepting can re-baseline a path.
                 this.baselines.set(record.path, record.content);
             }
         }

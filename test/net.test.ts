@@ -68,7 +68,7 @@ test('a new file gets an empty baseline and reads as all added', async (t) => {
     assert.equal(summary.files[0]?.removed, 0);
 });
 
-test('reset re-baselines so the summary drops to zero', async (t) => {
+test('accept re-baselines so the summary drops to zero', async (t) => {
     const dir = await makeTempDir('pi-diff-net-');
     t.after(() => rm(dir, { recursive: true, force: true }));
 
@@ -80,7 +80,7 @@ test('reset re-baselines so the summary drops to zero', async (t) => {
     assert.equal((await computeNetSummary(baselines, dir)).fileCount, 1);
 
     const pi = { appendEntry() {} } as unknown as ExtensionAPI;
-    await baselines.reset(pi);
+    await baselines.rebaseline(pi);
 
     assert.equal((await computeNetSummary(baselines, dir)).fileCount, 0);
 });
