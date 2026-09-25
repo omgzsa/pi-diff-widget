@@ -50,6 +50,17 @@ export class BaselineTracker {
         this.unflushed.add(absolute);
     }
 
+    /** Accept current content as the new baseline, so net changes drop to zero. */
+    async reset(pi: ExtensionAPI): Promise<void> {
+        for (const path of [...this.baselines.keys()]) {
+            const content = await readFileCapped(path);
+            if (content === undefined) continue;
+            this.baselines.set(path, content);
+            this.unflushed.add(path);
+        }
+        this.flush(pi);
+    }
+
     flush(pi: ExtensionAPI): void {
         if (this.unflushed.size === 0) return;
         const records: BaselineRecord[] = [];
@@ -73,9 +84,8 @@ export class BaselineTracker {
             )?.baselines;
             if (!Array.isArray(records)) continue;
             for (const record of records) {
-                if (!this.baselines.has(record.path)) {
-                    this.baselines.set(record.path, record.content);
-                }
+                // Later entries win, so a reset can re-baseline a path.
+                this.baselines.set(record.path, record.content);
             }
         }
     }

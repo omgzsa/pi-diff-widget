@@ -125,9 +125,22 @@ export function registerDiffWidget(
     });
 
     pi.registerCommand('diff-widget', {
-        description: 'Toggle the live edits widget above the editor',
-        handler: async (_args, ctx) => {
-            visible = !visible;
+        description:
+            'Toggle the live edits widget: on, off, or reset (accept current state)',
+        handler: async (args, ctx) => {
+            const action = args.trim().toLowerCase();
+
+            if (action === 'reset') {
+                await baselines.reset(pi);
+                await update(ctx);
+                ctx.ui.notify('Edits widget reset', 'info');
+                return;
+            }
+
+            if (action === 'on') visible = true;
+            else if (action === 'off') visible = false;
+            else visible = !visible;
+
             await update(ctx);
             ctx.ui.notify(`Edits widget ${visible ? 'on' : 'off'}`, 'info');
         },

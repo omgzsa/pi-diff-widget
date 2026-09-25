@@ -57,7 +57,9 @@ churn. It is independent of git: committing does not reset it. Paths are shown
 relative to the working directory. Baselines live in the session, capped at
 256 KB per file.
 
-It hides itself when nothing differs. Toggle it with `/diff-widget`.
+It hides itself when nothing differs. `/diff-widget` toggles it, and
+`/diff-widget reset` accepts the current state as the new baseline and clears the
+panel until the agent edits again, the equivalent of Zed's Keep All.
 
 ## Status
 

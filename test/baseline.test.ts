@@ -70,3 +70,18 @@ test('load ignores entries without a baseline list', () => {
     ]);
     assert.deepEqual(restored.paths(), []);
 });
+
+test('load keeps the latest baseline for a path', () => {
+    const entry = (content: string) =>
+        ({
+            type: 'custom',
+            id: 'x1',
+            parentId: null,
+            customType: BASELINE_ENTRY,
+            data: { baselines: [{ path: '/tmp/a.ts', content }] },
+        }) as unknown as SessionEntry;
+
+    const restored = new BaselineTracker();
+    restored.load([entry('first'), entry('second')]);
+    assert.equal(restored.get('/tmp/a.ts'), 'second');
+});

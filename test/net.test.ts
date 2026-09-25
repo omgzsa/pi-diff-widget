@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { rm } from 'node:fs/promises';
 import { test } from 'node:test';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { BaselineTracker, readFileCapped } from '../src/baseline.ts';
 import { computeNetSummary } from '../src/widget.ts';
 import { makeTempDir, write } from './support.ts';
@@ -65,6 +66,23 @@ test('a new file gets an empty baseline and reads as all added', async (t) => {
     const summary = await computeNetSummary(baselines, dir);
     assert.equal(summary.files[0]?.added, 1);
     assert.equal(summary.files[0]?.removed, 0);
+});
+
+test('reset re-baselines so the summary drops to zero', async (t) => {
+    const dir = await makeTempDir('pi-diff-net-');
+    t.after(() => rm(dir, { recursive: true, force: true }));
+
+    await write(dir, 'a.ts', 'one\n');
+    const baselines = new BaselineTracker();
+    await baselines.capture(dir, 'a.ts');
+
+    await write(dir, 'a.ts', 'two\n');
+    assert.equal((await computeNetSummary(baselines, dir)).fileCount, 1);
+
+    const pi = { appendEntry() {} } as unknown as ExtensionAPI;
+    await baselines.reset(pi);
+
+    assert.equal((await computeNetSummary(baselines, dir)).fileCount, 0);
 });
 
 test('readFileCapped returns undefined for oversized files', async (t) => {

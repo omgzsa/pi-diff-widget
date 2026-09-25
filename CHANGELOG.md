@@ -4,7 +4,15 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.0.2] - 2026-09-25
+
+### Added
+
+- `/diff-widget reset` accepts the current state as the new baseline, clearing
+  the live edits panel until the agent edits again. This is the equivalent of
+  Zed's Keep All.
+
+## [0.0.1] - 2026-09-25
 
 ### Added
 
