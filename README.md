@@ -2,6 +2,8 @@
 
 Interactive diff viewer and live edits widget for [pi](https://pi.dev).
 
+![Live edits widget showing 4 files, +17 -2](https://cdn.jsdelivr.net/gh/omgzsa/pi-diff-widget@v0.1.3/docs/widget.png)
+
 ## Install
 
 ```bash
