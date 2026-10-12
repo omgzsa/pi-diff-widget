@@ -6,15 +6,15 @@ Known gaps and planned work, roughly ordered. Nothing here blocks a release.
 
 ### Per-file accept and reject
 
-`/diff-widget accept <path>` and `/diff-widget reject <path>`, matching a tracked
-file by relative path, with argument completions from the tracked files. No path
-keeps the current all-or-nothing behavior.
+`/diff accept <path>` and `/diff reject <path>`, matching a tracked file by
+relative path, with argument completions from the tracked files. No path keeps
+the current all-or-nothing behavior.
 
 Where: `src/summary.ts` gains filtered `rebaselinePaths` and `revertPaths`; the
-existing all-files versions become the no-filter case. `src/widget.ts` parses the
-path argument. Later: `a` and `d` keys in the `/diff` overlay, which needs a
-mapping from a section back to its baseline path, since in the turns view a
-section is an edit rather than a file.
+existing all-files versions become the no-filter case. `src/index.ts` parses the
+path argument, in `parseDiffAction` or beside it. Later: `a` and `d` keys in the
+`/diff` overlay, which needs a mapping from a section back to its baseline path,
+since in the turns view a section is an edit rather than a file.
 
 ### `/diff` options
 
@@ -69,7 +69,7 @@ storing a hash and skipping the widget entry when the file exceeds the cap.
 ## Not planned
 
 - Accept/reject of individual hunks. pi has no checkpoint model, and widgets are
-  read-only. Whole-file operations exist (`/diff-widget accept` and `reject`), but
+  read-only. Whole-file operations exist (`/diff accept` and `/diff reject`), but
   there is no hunk-level model.
 
 ## Done
@@ -79,4 +79,4 @@ storing a hash and skipping the widget entry when the file exceeds the cap.
 - Per-turn view from session data, with `write` diffs persisted per turn.
 - `Tab` source toggle and `[` / `]` turn stepping.
 - Live net edits widget above the editor. Drops files once they are committed,
-  with `/diff-widget on|off|accept|reject`.
+  with `/diff accept`, `/diff reject`, and the `/diff-widget on|off` toggle.

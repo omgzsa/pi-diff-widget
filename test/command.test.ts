@@ -27,7 +27,12 @@ const theme: DocumentTheme = {
     bold: (text) => `*${text}*`,
 };
 
-type Command = { handler: (args: string, ctx: ExtensionContext) => Promise<void> };
+type Command = {
+    handler: (args: string, ctx: ExtensionContext) => Promise<void>;
+    getArgumentCompletions?: (
+        prefix: string,
+    ) => Array<{ value: string; label: string }> | null;
+};
 
 function fakeApi() {
     const commands = new Map<string, Command>();
@@ -53,6 +58,7 @@ function fakeTui(rows = 24): TUI {
 
 function fakeContext(options: { cwd: string; branch?: unknown[] }) {
     const notifications: Array<{ message: string; type?: string }> = [];
+    const confirmed: string[] = [];
     const rendered: string[][] = [];
     const stats = { customCalls: 0 };
 
@@ -64,6 +70,10 @@ function fakeContext(options: { cwd: string; branch?: unknown[] }) {
         ui: {
             notify(message: string, type?: string) {
                 notifications.push({ message, type });
+            },
+            async confirm(title: string, message: string) {
+                confirmed.push(`${title} ${message}`);
+                return true;
             },
             custom(factory: (...args: unknown[]) => unknown) {
                 stats.customCalls += 1;
@@ -82,7 +92,7 @@ function fakeContext(options: { cwd: string; branch?: unknown[] }) {
         },
     } as unknown as ExtensionContext;
 
-    return { ctx, notifications, rendered, stats };
+    return { ctx, notifications, confirmed, rendered, stats };
 }
 
 test('/diff renders uncommitted changes in the overlay', async (t) => {
@@ -179,6 +189,64 @@ test('/diff opens in turns mode when the worktree is clean', async (t) => {
     const header = rendered[0]?.[0] ?? '';
     assert.match(header, /turns/);
     assert.match(header, /edit something/);
+});
+
+test('/diff completes accept and reject', () => {
+    const { api, commands } = fakeApi();
+    extension(api);
+
+    const complete = commands.get('diff')?.getArgumentCompletions;
+    assert.ok(complete, 'expected argument completions');
+    assert.deepEqual(complete(''), [
+        { value: 'accept ', label: 'accept' },
+        { value: 'reject ', label: 'reject' },
+    ]);
+    assert.deepEqual(complete('re'), [{ value: 'reject ', label: 'reject' }]);
+});
+
+test('/diff accept reports the accepted edits without opening the overlay', async (t) => {
+    const repo = await initRepo();
+    t.after(() => rm(repo, { recursive: true, force: true }));
+
+    const { api, commands } = fakeApi();
+    extension(api);
+
+    const { ctx, notifications, stats } = fakeContext({ cwd: repo });
+    await commands.get('diff')?.handler('accept', ctx);
+
+    assert.equal(stats.customCalls, 0);
+    assert.equal(notifications[0]?.message, 'Edits accepted');
+});
+
+test('/diff reject reports an empty baseline set', async (t) => {
+    const repo = await initRepo();
+    t.after(() => rm(repo, { recursive: true, force: true }));
+
+    const { api, commands } = fakeApi();
+    extension(api);
+
+    const { ctx, notifications, confirmed, stats } = fakeContext({ cwd: repo });
+    await commands.get('diff')?.handler('reject', ctx);
+
+    assert.equal(stats.customCalls, 0);
+    assert.equal(notifications[0]?.message, 'Nothing to reject');
+    assert.deepEqual(confirmed, []);
+});
+
+test('/diff warns about an unknown argument instead of opening the overlay', async (t) => {
+    const repo = await initRepo();
+    t.after(() => rm(repo, { recursive: true, force: true }));
+
+    const { api, commands } = fakeApi();
+    extension(api);
+
+    const { ctx, notifications, stats } = fakeContext({ cwd: repo });
+    await commands.get('diff')?.handler('reset', ctx);
+
+    assert.equal(stats.customCalls, 0);
+    assert.equal(notifications[0]?.type, 'warning');
+    assert.match(notifications[0]?.message ?? '', /Unknown action "reset"/);
+    assert.match(notifications[0]?.message ?? '', /\/diff accept/);
 });
 
 test('command integration path still agrees with collectTurns', () => {

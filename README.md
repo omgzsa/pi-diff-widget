@@ -40,8 +40,8 @@ Keys:
 - `g` / `G`: jump to top / bottom
 - `q` / `Esc`: close
 
-See [Live edits widget](#live-edits-widget) for the `/diff-widget` actions
-(`on`, `off`, `accept`, `reject`).
+See [Commands](#commands) for `/diff accept`, `/diff reject`, and the
+`/diff-widget` visibility toggle.
 
 ## Live edits widget
 
@@ -66,27 +66,32 @@ move or delete stops counting as a whole-file deletion.
 
 It hides itself when nothing differs.
 
-### `/diff-widget` actions
+### Commands
+
+Keeping or undoing the agent's edits acts on the tracked files, not on everything
+the uncommitted view lists: `/diff accept` and `/diff reject` work from the
+session baselines, so files the agent never touched are left alone. If you hand
+edit a tracked file after the agent first touched it, `/diff reject` discards
+that edit too.
 
 | Command | Effect |
 |---|---|
+| `/diff accept` | Keep the agent's edits: the current content becomes the baseline and the panel clears. Alias: `keep` |
+| `/diff reject` | Undo the agent's edits: restore every tracked file to its pre-agent content, delete the files the agent created, and recreate the ones it deleted |
 | `/diff-widget` | Toggle the panel. With no argument it shows a hidden panel and hides a visible one |
 | `/diff-widget on` | Show it |
 | `/diff-widget off` | Hide it |
-| `/diff-widget accept` | Keep the agent's edits: the current content becomes the baseline and the panel clears. Alias: `keep` |
-| `/diff-widget reject` | Undo the agent's edits: restore every tracked file to its pre-agent content, delete the files the agent created, and recreate the ones it deleted |
 
 `accept` is Zed's Keep All. `reject` asks for confirmation first, naming up to
 five affected paths, and cannot be undone. Whole files only: there is no
 hunk-level accept or reject. With nothing to reject it reports `Nothing to
-reject`, and any unrecognized argument warns instead of toggling the panel, so a
-typo never hides the widget by accident.
+reject`. Any unrecognized argument warns instead of acting, so a typo never hides
+the panel or reverts a file. Both commands complete their arguments on `Tab`.
 
 ```
-/diff-widget
-/diff-widget on
-/diff-widget accept
-/diff-widget reject
+/diff accept
+/diff reject
+/diff-widget off
 ```
 
 ## Status

@@ -5,15 +5,12 @@ import type {
     ExtensionContext,
 } from '@earendil-works/pi-coding-agent';
 import type { Theme } from '@earendil-works/pi-coding-agent';
+import type { Refresh } from './actions.ts';
+import { argumentCompletions } from './actions.ts';
 import type { BaselineTracker } from './baseline.ts';
 import type { DocumentTheme } from './document.ts';
 import type { ExecFn } from './exec.ts';
-import {
-    collectRevertTargets,
-    computeNetSummary,
-    pruneCleanBaselines,
-    revertTargets,
-} from './summary.ts';
+import { computeNetSummary, pruneCleanBaselines } from './summary.ts';
 import type { EditSummary } from './view.ts';
 
 export const WIDGET_KEY = 'pi-diff';
@@ -76,7 +73,7 @@ export function registerDiffWidget(
     pi: ExtensionAPI,
     baselines: BaselineTracker,
     exec: ExecFn,
-): void {
+): Refresh {
     let visible = true;
 
     const update = async (ctx: ExtensionContext) => {
@@ -108,52 +105,17 @@ export function registerDiffWidget(
     });
 
     pi.registerCommand('diff-widget', {
-        description:
-            'Live edits widget: on, off, accept (keep), or reject (undo)',
+        description: 'Live edits widget: on, off, or toggle',
+        getArgumentCompletions: argumentCompletions(['on', 'off']),
         handler: async (args, ctx) => {
             const action = args.trim().toLowerCase();
-
-            if (action === 'reject') {
-                await ctx.waitForIdle();
-                const targets = await collectRevertTargets(baselines, ctx.cwd);
-                if (targets.length === 0) {
-                    ctx.ui.notify('Nothing to reject', 'info');
-                    return;
-                }
-                const names = targets
-                    .slice(0, 5)
-                    .map((target) => target.relativePath)
-                    .join(', ');
-                const rest =
-                    targets.length > 5 ? ` and ${targets.length - 5} more` : '';
-                const confirmed = await ctx.ui.confirm(
-                    'Reject agent edits?',
-                    `Restore ${targets.length} file(s) to their pre-agent content: ${names}${rest}. This cannot be undone.`,
-                );
-                if (!confirmed) return;
-
-                await revertTargets(targets);
-                await update(ctx);
-                ctx.ui.notify(
-                    `Rejected edits to ${targets.length} file(s)`,
-                    'info',
-                );
-                return;
-            }
-
-            if (action === 'accept' || action === 'keep') {
-                await baselines.rebaseline(pi);
-                await update(ctx);
-                ctx.ui.notify('Edits accepted', 'info');
-                return;
-            }
 
             if (action === 'on') visible = true;
             else if (action === 'off') visible = false;
             else if (action === '') visible = !visible;
             else {
                 ctx.ui.notify(
-                    `Unknown action "${action}". Use on, off, accept, or reject.`,
+                    `Unknown action "${action}". Use on or off. To keep or undo the edits, use /diff accept or /diff reject.`,
                     'warning',
                 );
                 return;
@@ -163,4 +125,6 @@ export function registerDiffWidget(
             ctx.ui.notify(`Edits widget ${visible ? 'on' : 'off'}`, 'info');
         },
     });
+
+    return update;
 }

@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-10-12
+
+### Changed
+
+- `accept` and `reject` moved to `/diff`, where the edits they act on are shown.
+  `/diff-widget` now only controls the panel: `on`, `off`, or a bare toggle.
+- `/diff` warns about an unrecognized argument instead of opening the viewer.
+- Both commands complete their arguments on `Tab`.
+
+### Removed
+
+- `/diff-widget accept` and `/diff-widget reject`. Use `/diff accept` and
+  `/diff reject`.
+
 ## [0.1.3] - 2026-10-12
 
 ### Added

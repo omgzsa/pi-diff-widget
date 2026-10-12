@@ -1,6 +1,12 @@
 import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
 import { collectUncommitted, type DiffFile } from './git.ts';
 import type { ExecFn } from './exec.ts';
+import {
+    acceptEdits,
+    argumentCompletions,
+    parseDiffAction,
+    rejectEdits,
+} from './actions.ts';
 import { createBaselineTracker } from './baseline.ts';
 import { collectTurns, createWriteDiffTracker } from './turns.ts';
 import { DiffViewer } from './ui.ts';
@@ -13,12 +19,30 @@ export default function (pi: ExtensionAPI) {
     const exec: ExecFn = (command, args, options) =>
         pi.exec(command, args, options);
 
-    registerDiffWidget(pi, baselines, exec);
+    const refreshWidget = registerDiffWidget(pi, baselines, exec);
 
     pi.registerCommand('diff', {
         description:
-            'Show uncommitted changes and per-turn edits in a scrollable viewer',
-        handler: async (_args, ctx) => {
+            'Show uncommitted changes and per-turn edits, or accept and reject the edits the agent made',
+        getArgumentCompletions: argumentCompletions(['accept', 'reject']),
+        handler: async (args, ctx) => {
+            const action = parseDiffAction(args);
+            if (action === 'accept') {
+                await acceptEdits(pi, baselines, refreshWidget, ctx);
+                return;
+            }
+            if (action === 'reject') {
+                await rejectEdits(baselines, refreshWidget, ctx);
+                return;
+            }
+            if (action === 'unknown') {
+                ctx.ui.notify(
+                    `Unknown action "${args.trim()}". Use /diff, /diff accept (keep), or /diff reject.`,
+                    'warning',
+                );
+                return;
+            }
+
             if (ctx.mode !== 'tui') {
                 ctx.ui.notify('/diff needs the interactive TUI', 'warning');
                 return;
