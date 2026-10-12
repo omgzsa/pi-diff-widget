@@ -38,6 +38,9 @@ Keys:
 - `g` / `G`: jump to top / bottom
 - `q` / `Esc`: close
 
+See [Live edits widget](#live-edits-widget) for the `/diff-widget` actions
+(`on`, `off`, `accept`, `reject`).
+
 ## Live edits widget
 
 Above the editor, pi-diff shows the net effect of the agent's edits this
@@ -55,14 +58,34 @@ touch and diffs it against the current content. Reverted files drop out and the
 counts are net, so it shows what the agent has actually changed, not cumulative
 churn. Committing a file drops it from the panel automatically, so what remains
 is the agent's work that is not yet committed. Paths are shown relative to the
-working directory. Baselines live in the session, capped at 256 KB per file.
+working directory. Baselines live in the session, capped at 256 KB per file. A
+baseline whose parent directory no longer exists is dropped, so a checkout you
+move or delete stops counting as a whole-file deletion.
 
-It hides itself when nothing differs. `/diff-widget` toggles it. `/diff-widget
-accept` (alias `keep`) makes the current state the new baseline, the equivalent of
-Zed's Keep All. `/diff-widget reject` restores every tracked file to its
-pre-agent content, deleting files the agent created and recreating ones it
-deleted. It asks for confirmation first, and cannot be undone. Unknown actions
-report a warning rather than toggling the widget.
+It hides itself when nothing differs.
+
+### `/diff-widget` actions
+
+| Command | Effect |
+|---|---|
+| `/diff-widget` | Toggle the panel. With no argument it shows a hidden panel and hides a visible one |
+| `/diff-widget on` | Show it |
+| `/diff-widget off` | Hide it |
+| `/diff-widget accept` | Keep the agent's edits: the current content becomes the baseline and the panel clears. Alias: `keep` |
+| `/diff-widget reject` | Undo the agent's edits: restore every tracked file to its pre-agent content, delete the files the agent created, and recreate the ones it deleted |
+
+`accept` is Zed's Keep All. `reject` asks for confirmation first, naming up to
+five affected paths, and cannot be undone. Whole files only: there is no
+hunk-level accept or reject. With nothing to reject it reports `Nothing to
+reject`, and any unrecognized argument warns instead of toggling the panel, so a
+typo never hides the widget by accident.
+
+```
+/diff-widget
+/diff-widget on
+/diff-widget accept
+/diff-widget reject
+```
 
 ## Status
 
