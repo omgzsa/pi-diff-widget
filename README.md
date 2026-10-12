@@ -9,7 +9,7 @@ pi install npm:pi-diff-widget
 # straight from the repo, no npm required
 pi install git:github.com/omgzsa/pi-diff-widget
 # or from a local checkout
-pi install /absolute/path/to/pi-diff
+pi install /absolute/path/to/pi-diff-widget
 ```
 
 ## Usage
