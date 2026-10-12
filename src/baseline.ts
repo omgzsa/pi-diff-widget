@@ -38,7 +38,11 @@ export async function readBaseline(
     return { content, existed: true };
 }
 
-/** Content only, for callers that do not care whether the file existed. */
+/**
+ * Content only, for callers that do not care whether the file existed. A missing
+ * path returns an empty string, not undefined, so callers that must tell a
+ * vanished file apart from an empty one use readBaseline or locationGone.
+ */
 export async function readFileCapped(
     path: string,
     maxBytes = MAX_BASELINE_BYTES,

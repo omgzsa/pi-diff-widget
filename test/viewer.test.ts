@@ -83,6 +83,13 @@ test('bracket keys step turns while in the turns source', () => {
     assert.match(header, /first prompt/);
 });
 
+test('uses a singular file count in the uncommitted header', () => {
+    const viewer = makeViewer({
+        uncommitted: [{ title: 'src/a.ts', detail: 'modified', diff: 'x' }],
+    });
+    assert.match(viewer.render(80)[0] ?? '', /1 file\]/);
+});
+
 test('truncates content wider than a narrow terminal', () => {
     const viewer = makeViewer({
         uncommitted: [{ title: 'x'.repeat(200), diff: 'y'.repeat(200) }],

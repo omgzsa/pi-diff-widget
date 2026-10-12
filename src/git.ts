@@ -19,6 +19,8 @@ export interface DiffFile {
     diff: string;
 }
 
+// Files larger than this are reported as too-large instead of read into memory,
+// and diffs are cut off at the line cap so one huge file cannot stall the view.
 const MAX_TEXT_BYTES = 512 * 1024;
 const MAX_DIFF_LINES = 4000;
 

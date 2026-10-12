@@ -76,7 +76,9 @@ export class DiffViewer implements Component {
             const label = this.turns[this.turnIndex]?.label ?? '';
             return `${this.title} · turns  ${this.theme.fg('dim', `${counter} ${label}`)}`;
         }
-        return `${this.title} · uncommitted  ${this.theme.fg('dim', `[${this.uncommitted.length} files]`)}`;
+        const count = this.uncommitted.length;
+        const label = count === 1 ? '1 file' : `${count} files`;
+        return `${this.title} · uncommitted  ${this.theme.fg('dim', `[${label}]`)}`;
     }
 
     private footerHint(): string {
