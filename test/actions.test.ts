@@ -60,6 +60,15 @@ test('argumentCompletions completes the first word only', () => {
     assert.equal(complete('accept '), null);
 });
 
+test('argumentCompletions steps aside once a word names an action', () => {
+    const complete = argumentCompletions(['accept', 'reject']);
+    // Otherwise the open menu eats the Enter and inserts a trailing space.
+    assert.equal(complete('accept'), null);
+    assert.equal(complete('ACCEPT'), null);
+    assert.equal(complete('reject'), null);
+    assert.deepEqual(complete('acc'), [{ value: 'accept ', label: 'accept' }]);
+});
+
 test('accept makes the current content the baseline', async (t) => {
     const dir = await makeTempDir('pi-diff-actions-');
     t.after(() => rm(dir, { recursive: true, force: true }));

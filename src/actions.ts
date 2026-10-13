@@ -24,6 +24,11 @@ export function argumentCompletions(
     return (prefix) => {
         const [first = '', ...rest] = prefix.trimStart().split(/\s+/);
         if (rest.length > 0) return null;
+        // A word that already names an action gets no suggestion. An open menu
+        // would swallow the Enter that means "run it", so the command would need
+        // a second Enter, and the item's trailing space would appear in the box.
+        const lower = first.toLowerCase();
+        if (items.some((item) => item.toLowerCase() === lower)) return null;
         return items
             .filter((item) => item.startsWith(first))
             .map((item) => ({ value: `${item} `, label: item }));
