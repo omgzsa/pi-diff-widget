@@ -1,4 +1,5 @@
 import { dirname } from 'node:path';
+import { createLocalBashOperations } from '@earendil-works/pi-coding-agent';
 import { truncateToWidth } from '@earendil-works/pi-tui';
 import type { Component, TUI } from '@earendil-works/pi-tui';
 import type {
@@ -155,6 +156,23 @@ export function registerDiffWidget(
     });
     pi.on('turn_end', (_event, ctx) => void update(ctx));
     pi.on('agent_settled', (_event, ctx) => void update(ctx));
+
+    // `!` and `!!` commands run outside the agent loop and emit no turn
+    // boundary, so wrap the local backend and refresh once the command exits.
+    pi.on('user_bash', (_event, ctx) => {
+        const local = createLocalBashOperations();
+        return {
+            operations: {
+                async exec(command, cwd, options) {
+                    try {
+                        return await local.exec(command, cwd, options);
+                    } finally {
+                        void update(ctx);
+                    }
+                },
+            },
+        };
+    });
     pi.on('session_shutdown', (_event, ctx) => {
         if (ctx.hasUI) ctx.ui.setWidget(WIDGET_KEY, undefined);
     });

@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-11-05
+
+### Added
+
+- The edits widget refreshes after a user `!` or `!!` bash command. Those
+  commands run outside the agent loop and emit no turn boundary, so the local
+  bash backend is wrapped and the panel updates once the command exits.
+
 ## [0.3.0] - 2026-11-05
 
 ### Added

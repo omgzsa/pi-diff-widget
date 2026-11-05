@@ -1,8 +1,13 @@
 import assert from 'node:assert/strict';
+import { rm } from 'node:fs/promises';
+import { join } from 'node:path';
 import { test } from 'node:test';
+import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import { BaselineTracker } from '../src/baseline.ts';
 import type { DocumentTheme } from '../src/document.ts';
 import type { EditSummary } from '../src/view.ts';
-import { buildEditSummaryLines } from '../src/widget.ts';
+import { buildEditSummaryLines, registerDiffWidget } from '../src/widget.ts';
+import { commitAll, execFn, initRepo, write } from './support.ts';
 
 const theme: DocumentTheme = {
     fg: (color, text) => `[${color}]${text}`,
@@ -98,4 +103,62 @@ test('uses a singular file label', () => {
         files: [{ path: 'a.ts', added: 1, removed: 0 }],
     };
     assert.match(buildEditSummaryLines(single, theme)[0] ?? '', /1 file/);
+});
+
+
+test('refreshes the panel after a ! bash command', async (t) => {
+    const repo = await initRepo();
+    t.after(() => rm(repo, { recursive: true, force: true }));
+    await write(repo, 'keep.ts', 'one\n');
+    await commitAll(repo, 'init');
+
+    const handlers = new Map<
+        string,
+        Array<(event: unknown, ctx: unknown) => unknown>
+    >();
+    const api = {
+        on(event: string, handler: (event: unknown, ctx: unknown) => unknown) {
+            handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+        },
+        appendEntry() {},
+        registerCommand() {},
+    } as unknown as ExtensionAPI;
+    const baselines = new BaselineTracker();
+    registerDiffWidget(api, baselines, execFn);
+
+    const ctx = {
+        hasUI: true,
+        cwd: repo,
+        ui: { setWidget() {} },
+    };
+    const handler = (handlers.get('user_bash') ?? [])[0];
+    const result = (await handler?.(
+        {
+            type: 'user_bash',
+            command: 'echo hi > fresh.ts',
+            excludeFromContext: false,
+            cwd: repo,
+        },
+        ctx,
+    )) as {
+        operations: {
+            exec: (
+                command: string,
+                cwd: string,
+                options: { onData: () => void },
+            ) => Promise<unknown>;
+        };
+    };
+
+    await result.operations.exec(
+        'echo hi > fresh.ts',
+        repo,
+        { onData() {} },
+    );
+
+    const fresh = join(repo, 'fresh.ts');
+    for (let i = 0; i < 50 && !baselines.tracks(fresh); i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+    }
+    assert.equal(baselines.tracks(fresh), true);
 });
