@@ -55,14 +55,29 @@ src/index.ts    +1 -0
 src/ui.ts       +1 -0
 ```
 
-For each file the agent touches, pi-diff records the content before the first
-touch and diffs it against the current content. Reverted files drop out and the
-counts are net, so it shows what the agent has actually changed, not cumulative
-churn. Committing a file drops it from the panel automatically, so what remains
-is the agent's work that is not yet committed. Paths are shown relative to the
-working directory. Baselines live in the session, capped at 256 KB per file. A
-baseline whose parent directory no longer exists is dropped, so a checkout you
-move or delete stops counting as a whole-file deletion.
+For each file the agent touches with `edit` or `write`, pi-diff records the
+content before the first touch and diffs it against the current content.
+Reverted files drop out and the counts are net, so it shows what the agent has
+actually changed, not cumulative churn. Committing a file drops it from the
+panel automatically, so what remains is the agent's work that is not yet
+committed. Paths are shown relative to the working directory. Baselines live in
+the session, capped at 256 KB per file. A baseline whose parent directory no
+longer exists is dropped, so a checkout you move or delete stops counting as a
+whole-file deletion.
+
+At every turn boundary the panel also reconciles against `git status`: a file
+that became dirty without an `edit`/`write` call, such as one written by `bash`,
+a codegen script, another session, or a subagent, gets the `HEAD` content as its
+baseline and appears. Files that were already dirty when the session started are
+left alone, so your own uncommitted work is never claimed as the agent's. Only
+changes git can see are reconciled: an ignored path changed through `bash`
+stays invisible, while one touched through `edit` or `write` is tracked and
+survives the commit prune.
+
+Files over the 256 KB cap are listed with a note instead of disappearing. When
+more than eight files changed, the panel lists the first eight and groups the
+rest by folder with per-folder counts, so a large session still names every
+folder that has edits.
 
 It hides itself when nothing differs.
 
@@ -70,14 +85,17 @@ It hides itself when nothing differs.
 
 Keeping or undoing the agent's edits acts on the tracked files, not on everything
 the uncommitted view lists: `/diff accept` and `/diff reject` work from the
-session baselines, so files the agent never touched are left alone. If you hand
-edit a tracked file after the agent first touched it, `/diff reject` discards
-that edit too.
+session baselines. Files the agent never changed, and files that were already
+dirty when the session started, are left alone. If you hand edit a tracked file
+after the agent first touched it, `/diff reject` discards that edit too. A
+reconciled file reverts to `HEAD`, and a reconciled new file is deleted. Files
+over the baseline cap are listed but cannot be diffed, accepted, or reverted;
+they leave the panel once committed or removed.
 
 | Command | Effect |
 |---|---|
 | `/diff accept` | Keep the agent's edits: the current content becomes the baseline and the panel clears. Alias: `keep` |
-| `/diff reject` | Undo the agent's edits: restore every tracked file to its pre-agent content, delete the files the agent created, and recreate the ones it deleted |
+| `/diff reject` | Undo the agent's edits: restore every tracked file to its pre-agent content (or `HEAD` for reconciled files), delete the files the agent created, and recreate the ones it deleted |
 | `/diff-widget` | Toggle the panel. With no argument it shows a hidden panel and hides a visible one |
 | `/diff-widget on` | Show it |
 | `/diff-widget off` | Hide it |
@@ -99,7 +117,10 @@ the panel or reverts a file. Both commands complete their arguments on `Tab`.
 - [x] Uncommitted changes (`git diff HEAD` plus untracked files)
 - [x] Per-turn diffs grouped by prompt, reconstructed from session edit results
 - [x] `write`-tool before/after snapshots, persisted per turn
+- [x] Nested `edit`/`write` diffs from codemode and other tool-calling tools
 - [x] Live net edits widget above the editor, with `/diff-widget on|off|accept|reject`
+- [x] Reconciliation with git for edits made outside `edit`/`write` (bash, codegen, subagents)
+- [x] Correct paths when pi runs in a subdirectory of the repository
 
 See [ROADMAP.md](./ROADMAP.md) for planned work and known gaps.
 
@@ -112,6 +133,13 @@ See [ROADMAP.md](./ROADMAP.md) for planned work and known gaps.
   tool stores no diff, so a `tool_call` handler snapshots the old content,
   synthesizes one on `tool_result`, and appends it to the session at `turn_end`.
   Write diffs therefore survive reload, same as edit diffs.
+- Calls another tool makes, such as a codemode script's `tools.edit` or
+  `tools.write`, never reach the transcript as their own results. Their diffs are
+  captured from the nested `tool_result` hook and persisted under the calling
+  call's id, then attributed to the turn that owns it.
+- Git paths are read from the repository root and displayed relative to the
+  working directory, so running pi inside a subdirectory still reports tracked
+  files correctly instead of as deletions.
 
 ## Development
 

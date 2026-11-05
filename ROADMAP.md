@@ -60,11 +60,28 @@ matches inline edit diffs, but it is a hidden dependency. It is already
 injectable (`renderDiffText`), so the options are to require the injection
 everywhere or document the global reliance more loudly.
 
+### Ignored files changed through bash
+
+Reconciliation reads `git status`, which never lists ignored paths. An `edit` or
+`write` to `.scratch/`, `dist/`, or `.env*` is tracked and survives prune, but a
+`bash` redirect or codegen write there stays invisible. Parsing shell commands
+for write targets is the only way to catch those without walking the tree, and
+it is not worth the false positives yet.
+
 ### Baseline storage
 
 Baselines store file content in the session, capped at 256 KB per file. Fine for
-source files, but a session that touches very large files pays for it. Consider
-storing a hash and skipping the widget entry when the file exceeds the cap.
+source files, but a session that touches very large files pays for it. Files over
+the cap are now listed with a note rather than dropped, but still cannot be
+diffed or reverted. Consider storing a hash plus a sidecar blob so large files
+stay trackable without bloating the session JSONL.
+
+### Reconciliation attribution
+
+Files that become dirty mid-session are attributed to the agent, because nothing
+records whether the user, a subagent, or a codegen script changed them. The
+session-start snapshot protects work that predates the session. A concurrent
+editor writing while the agent runs would still be claimed.
 
 ## Not planned
 
@@ -78,5 +95,14 @@ storing a hash and skipping the widget entry when the file exceeds the cap.
   oversized, and unreadable handling.
 - Per-turn view from session data, with `write` diffs persisted per turn.
 - `Tab` source toggle and `[` / `]` turn stepping.
+- Repository-root path normalization, so a subdirectory `cwd` no longer reports
+  tracked changes as deletions or prunes their baselines.
+- Prune keeps baselines git cannot judge, such as ignored files and nested repos.
+- Reconciliation with git at turn boundaries, so bash, codegen, other-session,
+  and subagent edits appear with a `HEAD` baseline.
+- Nested `edit`/`write` diffs from codemode and other tool-calling tools, persisted
+  and attributed to the calling turn.
+- Oversized files listed with a note; overflow grouped by folder instead of one
+  opaque counter.
 - Live net edits widget above the editor. Drops files once they are committed,
   with `/diff accept`, `/diff reject`, and the `/diff-widget on|off` toggle.

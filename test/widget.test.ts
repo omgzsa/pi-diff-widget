@@ -30,19 +30,64 @@ test('builds a header plus one line per file', () => {
     assert.match(lines[1] ?? '', /git\.ts/);
 });
 
-test('caps the file list and notes the remainder', () => {
+test('groups the overflow by directory so big sessions name every folder', () => {
     const many: EditSummary = {
-        ...summary,
-        fileCount: 12,
-        files: Array.from({ length: 12 }, (_, i) => ({
-            path: `f${i}.ts`,
-            added: 1,
-            removed: 0,
-        })),
+        fileCount: 5,
+        added: 5,
+        removed: 0,
+        files: [
+            { path: 'keep.ts', added: 1, removed: 0 },
+            { path: 'also.ts', added: 1, removed: 0 },
+            { path: 'src/radar/a.ts', added: 1, removed: 0 },
+            { path: 'src/radar/b.ts', added: 1, removed: 0 },
+            { path: 'scripts/x.ts', added: 1, removed: 0 },
+        ],
     };
-    const lines = buildEditSummaryLines(many, theme, 8);
-    assert.equal(lines.length, 10);
-    assert.match(lines[9] ?? '', /4 more/);
+    const lines = buildEditSummaryLines(many, theme, 2);
+
+    assert.equal(lines.length, 5);
+    assert.match(lines[3] ?? '', /src\/radar\//);
+    assert.match(lines[3] ?? '', /2 files/);
+    assert.match(lines[4] ?? '', /scripts\//);
+    assert.match(lines[4] ?? '', /1 file/);
+});
+
+test('caps the directory groups and counts the rest', () => {
+    const files = Array.from({ length: 10 }, (_, i) => ({
+        path: `dir${i}/f.ts`,
+        added: 1,
+        removed: 0,
+    }));
+    const many: EditSummary = {
+        fileCount: files.length,
+        added: 10,
+        removed: 0,
+        files,
+    };
+    const lines = buildEditSummaryLines(many, theme, 2);
+
+    assert.match(lines.at(-1) ?? '', /… 2 more files in 2 folders/);
+});
+
+test('names files that could not be tracked instead of dropping them', () => {
+    const skipped: EditSummary = {
+        fileCount: 1,
+        added: 0,
+        removed: 0,
+        files: [
+            {
+                path: 'big.json',
+                added: 0,
+                removed: 0,
+                note: 'too large to diff',
+            },
+        ],
+    };
+    const lines = buildEditSummaryLines(skipped, theme);
+
+    assert.match(lines[1] ?? '', /big\.json/);
+    assert.match(lines[1] ?? '', /too large to diff/);
+    assert.doesNotMatch(lines[1] ?? '', /\+0/);
 });
 
 test('uses a singular file label', () => {

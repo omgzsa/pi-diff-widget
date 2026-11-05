@@ -1,4 +1,4 @@
-import { readFile, stat } from 'node:fs/promises';
+import { readFile, realpath, stat } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { isToolCallEventType } from '@earendil-works/pi-coding-agent';
 import type {
@@ -7,13 +7,17 @@ import type {
 } from '@earendil-works/pi-coding-agent';
 
 export const BASELINE_ENTRY = 'pi-diff:baselines';
-const MAX_BASELINE_BYTES = 256 * 1024;
+export const MAX_BASELINE_BYTES = 256 * 1024;
+
+export type SkipReason = 'too-large' | 'unreadable';
 
 export interface BaselineRecord {
     path: string;
-    content: string;
+    content?: string;
     /** True when the file did not exist when the baseline was captured. */
     missing?: boolean;
+    /** Set instead of content when the file cannot be tracked. */
+    skipped?: SkipReason;
 }
 
 export interface BaselineRead {
@@ -21,21 +25,48 @@ export interface BaselineRead {
     existed: boolean;
 }
 
+export type BaselineProbe =
+    | ({ kind: 'content' } & BaselineRead)
+    | { kind: 'too-large' }
+    | { kind: 'unreadable' };
+
 /**
- * Read a file for baselining. `existed` distinguishes a missing file (empty
- * baseline) from a genuinely empty file, which reject needs in order to delete
- * versus empty. Returns undefined when the file is too large or unreadable.
+ * Read a file for baselining. A missing file is content-less but `existed`
+ * false; a directory is not a file either. Oversized and unreadable files are
+ * reported separately so the widget can name them instead of dropping them.
  */
+export async function probeBaseline(
+    path: string,
+    maxBytes = MAX_BASELINE_BYTES,
+): Promise<BaselineProbe> {
+    let info;
+    try {
+        info = await stat(path);
+    } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+            return { kind: 'content', content: '', existed: false };
+        }
+        return { kind: 'unreadable' };
+    }
+    if (!info.isFile()) return { kind: 'content', content: '', existed: false };
+    if (info.size > maxBytes) return { kind: 'too-large' };
+    try {
+        const content = await readFile(path, 'utf8');
+        return { kind: 'content', content, existed: true };
+    } catch {
+        return { kind: 'unreadable' };
+    }
+}
+
+/** Content and existence, or undefined when the file cannot be tracked. */
 export async function readBaseline(
     path: string,
     maxBytes = MAX_BASELINE_BYTES,
 ): Promise<BaselineRead | undefined> {
-    const info = await stat(path).catch(() => undefined);
-    if (!info || !info.isFile()) return { content: '', existed: false };
-    if (info.size > maxBytes) return undefined;
-    const content = await readFile(path, 'utf8').catch(() => undefined);
-    if (content === undefined) return undefined;
-    return { content, existed: true };
+    const probe = await probeBaseline(path, maxBytes);
+    return probe.kind === 'content'
+        ? { content: probe.content, existed: probe.existed }
+        : undefined;
 }
 
 /**
@@ -67,14 +98,29 @@ export async function locationGone(path: string): Promise<boolean> {
 export class BaselineTracker {
     private readonly baselines = new Map<string, string>();
     private readonly missing = new Set<string>();
+    private readonly skipped = new Map<string, SkipReason>();
     private readonly unflushed = new Set<string>();
+    /** Dirty when the session started; never seeded from HEAD. */
+    private readonly preexisting = new Set<string>();
 
     get(path: string): string | undefined {
         return this.baselines.get(path);
     }
 
+    /** True when the path has content or a skip marker. */
+    tracks(path: string): boolean {
+        return this.baselines.has(path) || this.skipped.has(path);
+    }
+
     paths(): string[] {
         return [...this.baselines.keys()];
+    }
+
+    /** Files tracked but not diffable, with the reason, in path order. */
+    skippedPaths(): Array<{ path: string; reason: SkipReason }> {
+        return [...this.skipped]
+            .map(([path, reason]) => ({ path, reason }))
+            .sort((a, b) => a.path.localeCompare(b.path));
     }
 
     /** True when the path did not exist before the agent first touched it. */
@@ -83,20 +129,59 @@ export class BaselineTracker {
     }
 
     async capture(cwd: string, path: string): Promise<void> {
-        const absolute = resolve(cwd, path);
-        if (this.baselines.has(absolute)) return;
-        const read = await readBaseline(absolute);
-        if (read === undefined) return;
-        this.store(absolute, read);
+        // Real paths keep baselines comparable with git's physical repo root.
+        const absolute = await realpath(resolve(cwd, path)).catch(() =>
+            resolve(cwd, path),
+        );
+        if (this.tracks(absolute)) return;
+        const probe = await probeBaseline(absolute);
+        if (probe.kind === 'content') {
+            this.store(absolute, probe);
+        } else {
+            this.skipped.set(absolute, probe.kind);
+        }
         this.unflushed.add(absolute);
+    }
+
+    /** Record that a path cannot be tracked, replacing any content baseline. */
+    skip(path: string, reason: SkipReason): void {
+        this.skipped.set(path, reason);
+        this.baselines.delete(path);
+        this.missing.delete(path);
+        this.unflushed.add(path);
+    }
+
+    /**
+     * Seed a baseline from a known earlier state, such as HEAD content, for a
+     * file the agent changed without going through `edit` or `write`.
+     */
+    seed(path: string, content: string, existed: boolean): void {
+        if (Buffer.byteLength(content, 'utf8') > MAX_BASELINE_BYTES) {
+            this.skipped.set(path, 'too-large');
+            this.baselines.delete(path);
+            this.missing.delete(path);
+        } else {
+            this.store(path, { content, existed });
+        }
+        this.unflushed.add(path);
+    }
+
+    /** Remember files that were already dirty when the session started. */
+    markPreexisting(paths: Iterable<string>): void {
+        for (const path of paths) this.preexisting.add(path);
+    }
+
+    isPreexisting(path: string): boolean {
+        return this.preexisting.has(path);
     }
 
     /** Accept current content as the new baseline, so net changes drop to zero. */
     async rebaseline(pi: ExtensionAPI): Promise<void> {
-        for (const path of [...this.baselines.keys()]) {
-            const read = await readBaseline(path);
-            if (read === undefined) continue;
-            this.store(path, read);
+        const paths = new Set([...this.baselines.keys(), ...this.skipped.keys()]);
+        for (const path of paths) {
+            const probe = await probeBaseline(path);
+            if (probe.kind === 'content') this.store(path, probe);
+            else this.skipped.set(path, probe.kind);
             this.unflushed.add(path);
         }
         this.flush(pi);
@@ -108,12 +193,20 @@ export class BaselineTracker {
             if (!keep(path)) {
                 this.baselines.delete(path);
                 this.missing.delete(path);
+                this.unflushed.delete(path);
+            }
+        }
+        for (const path of [...this.skipped.keys()]) {
+            if (!keep(path)) {
+                this.skipped.delete(path);
+                this.unflushed.delete(path);
             }
         }
     }
 
     private store(path: string, read: BaselineRead): void {
         this.baselines.set(path, read.content);
+        this.skipped.delete(path);
         if (read.existed) this.missing.delete(path);
         else this.missing.add(path);
     }
@@ -122,13 +215,16 @@ export class BaselineTracker {
         if (this.unflushed.size === 0) return;
         const records: BaselineRecord[] = [];
         for (const path of this.unflushed) {
-            const content = this.baselines.get(path);
-            if (content === undefined) continue;
-            records.push({
-                path,
-                content,
-                missing: this.missing.has(path) ? true : undefined,
-            });
+            if (this.baselines.has(path)) {
+                records.push({
+                    path,
+                    content: this.baselines.get(path),
+                    missing: this.missing.has(path) ? true : undefined,
+                });
+                continue;
+            }
+            const reason = this.skipped.get(path);
+            if (reason) records.push({ path, skipped: reason });
         }
         this.unflushed.clear();
         if (records.length > 0) {
@@ -149,6 +245,13 @@ export class BaselineTracker {
             )?.baselines;
             if (!Array.isArray(records)) continue;
             for (const record of records) {
+                if (record.skipped) {
+                    this.baselines.delete(record.path);
+                    this.missing.delete(record.path);
+                    this.skipped.set(record.path, record.skipped);
+                    continue;
+                }
+                if (typeof record.content !== 'string') continue;
                 // Later entries win, so accepting can re-baseline a path.
                 this.store(record.path, {
                     content: record.content,

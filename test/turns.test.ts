@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { SessionEntry } from '@earendil-works/pi-coding-agent';
 import {
+    NESTED_EDIT_ENTRY,
     WRITE_DIFF_ENTRY,
     collectTurns,
     type SessionBranchSource,
@@ -180,4 +181,58 @@ test('prefers the live lookup over persisted data', () => {
     });
     const turns = collectTurns(fakeSession(entries), lookup);
     assert.equal(turns[0]?.edits[0]?.diff, '+1 live');
+});
+
+function nestedDiffsEntry(
+    customType: string,
+    diffs: Array<{ toolCallId: string; path: string; diff: string }>,
+) {
+    return {
+        type: 'custom',
+        id: 'x2',
+        parentId: null,
+        customType,
+        data: { diffs },
+    };
+}
+
+test('attributes nested codemode edit and write diffs to the calling turn', () => {
+    const entries = [
+        userMessage('refactor radar'),
+        assistantWithCalls([
+            { id: 'c1', name: 'codemode', args: { code: '...' } },
+        ]),
+        toolResult('t1', 'c1', 'codemode', undefined),
+        nestedDiffsEntry(NESTED_EDIT_ENTRY, [
+            { toolCallId: 'c1/1', path: 'src/a.ts', diff: '+1 edited' },
+        ]),
+        nestedDiffsEntry(WRITE_DIFF_ENTRY, [
+            { toolCallId: 'c1/2', path: 'src/b.ts', diff: '+1 written' },
+        ]),
+    ];
+
+    const turns = collectTurns(fakeSession(entries), () => undefined);
+    assert.deepEqual(
+        turns[0]?.edits.map((edit) => [edit.path, edit.diff]),
+        [
+            ['src/a.ts', '+1 edited'],
+            ['src/b.ts', '+1 written'],
+        ],
+    );
+});
+
+test('does not list a direct call as its own nested diff', () => {
+    const entries = [
+        userMessage('write it'),
+        assistantWithCalls([
+            { id: 'c1', name: 'write', args: { path: 'src/b.ts' } },
+        ]),
+        toolResult('t1', 'c1', 'write', undefined),
+        nestedDiffsEntry(WRITE_DIFF_ENTRY, [
+            { toolCallId: 'c1', path: 'src/b.ts', diff: '+1 direct' },
+        ]),
+    ];
+
+    const turns = collectTurns(fakeSession(entries), () => undefined);
+    assert.equal(turns[0]?.edits.length, 1);
 });

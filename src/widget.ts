@@ -1,3 +1,4 @@
+import { dirname } from 'node:path';
 import { truncateToWidth } from '@earendil-works/pi-tui';
 import type { Component, TUI } from '@earendil-works/pi-tui';
 import type {
@@ -10,11 +11,16 @@ import { argumentCompletions } from './actions.ts';
 import type { BaselineTracker } from './baseline.ts';
 import type { DocumentTheme } from './document.ts';
 import type { ExecFn } from './exec.ts';
-import { computeNetSummary, pruneCleanBaselines } from './summary.ts';
+import {
+    computeNetSummary,
+    recordPreexisting,
+    syncBaselines,
+} from './summary.ts';
 import type { EditSummary } from './view.ts';
 
 export const WIDGET_KEY = 'pi-diff';
 const MAX_FILES = 8;
+const MAX_GROUPS = 6;
 const MAX_PATH_WIDTH = 48;
 
 function formatCounts(
@@ -41,11 +47,54 @@ export function buildEditSummaryLines(
     const shown = summary.files.slice(0, maxFiles);
     for (const file of shown) {
         const path = truncateToWidth(file.path, MAX_PATH_WIDTH, '…');
-        lines.push(`${path}  ${formatCounts(file, theme)}`);
+        const detail = file.note
+            ? theme.fg('dim', file.note)
+            : formatCounts(file, theme);
+        lines.push(`${path}  ${detail}`);
     }
-    if (summary.files.length > shown.length) {
-        const rest = summary.files.length - shown.length;
-        lines.push(theme.fg('dim', `… ${rest} more`));
+
+    // Overflow is grouped by directory, so a big session still names every
+    // folder with edits instead of hiding most of them behind one counter.
+    const rest = summary.files.slice(shown.length);
+    if (rest.length > 0) {
+        const groups = new Map<
+            string,
+            { count: number; added: number; removed: number }
+        >();
+        for (const file of rest) {
+            const dir = dirname(file.path);
+            const key = dir === '.' ? './' : `${dir}/`;
+            const group = groups.get(key) ?? {
+                count: 0,
+                added: 0,
+                removed: 0,
+            };
+            group.count += 1;
+            group.added += file.added;
+            group.removed += file.removed;
+            groups.set(key, group);
+        }
+
+        const ordered = [...groups].sort(
+            (a, b) => b[1].count - a[1].count || a[0].localeCompare(b[0]),
+        );
+        for (const [dir, group] of ordered.slice(0, MAX_GROUPS)) {
+            const path = truncateToWidth(dir, MAX_PATH_WIDTH, '…');
+            const files = group.count === 1 ? '1 file' : `${group.count} files`;
+            lines.push(
+                `${path}  ${theme.fg('dim', files)}  ${formatCounts(group, theme)}`,
+            );
+        }
+        const hidden = ordered.slice(MAX_GROUPS);
+        if (hidden.length > 0) {
+            const files = hidden.reduce((sum, [, group]) => sum + group.count, 0);
+            lines.push(
+                theme.fg(
+                    'dim',
+                    `… ${files} more files in ${hidden.length} folders`,
+                ),
+            );
+        }
     }
 
     return lines;
@@ -78,7 +127,10 @@ export function registerDiffWidget(
 
     const update = async (ctx: ExtensionContext) => {
         if (!ctx.hasUI) return;
-        await pruneCleanBaselines(baselines, exec, ctx.cwd);
+        // Files changed outside `edit`/`write` (bash, codegen, other sessions)
+        // get a HEAD baseline so they still appear, then prune committed work.
+        const seeded = await syncBaselines(baselines, exec, ctx.cwd);
+        if (seeded > 0) baselines.flush(pi);
         if (!visible) {
             ctx.ui.setWidget(WIDGET_KEY, undefined);
             return;
@@ -97,7 +149,10 @@ export function registerDiffWidget(
         );
     };
 
-    pi.on('session_start', (_event, ctx) => void update(ctx));
+    pi.on('session_start', async (_event, ctx) => {
+        await recordPreexisting(baselines, exec, ctx.cwd);
+        await update(ctx);
+    });
     pi.on('turn_end', (_event, ctx) => void update(ctx));
     pi.on('agent_settled', (_event, ctx) => void update(ctx));
     pi.on('session_shutdown', (_event, ctx) => {

@@ -4,6 +4,32 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-11-05
+
+### Added
+
+- The live edits widget reconciles against git at each turn boundary. Files
+  changed outside `edit`/`write`, such as bash redirection, codegen, another
+  session, or a subagent, are baselined from `HEAD` and shown. Files already
+  dirty when the session starts are never claimed or reverted.
+- Nested `edit`/`write` calls from codemode and other tool-calling tools are
+  persisted and attributed to the calling turn in `/diff`'s turns view.
+- Files over the 256 KB baseline cap are listed with a note instead of being
+  dropped silently.
+- Overflow in the widget is grouped by folder with counts, so every folder with
+  edits is named instead of only the first eight files.
+
+### Fixed
+
+- Running pi in a subdirectory of a repository no longer reports tracked changes
+  as deletions. Git paths are read from the repository root and displayed
+  relative to the working directory.
+- Pruning no longer discards baselines for paths git cannot judge, such as
+  gitignored files or files inside a nested repository. Those edits stayed
+  visible and `/diff reject` could still restore them.
+- Symlinked working directories compare correctly with git's physical repository
+  root.
+
 ## [0.2.1] - 2026-10-12
 
 ### Fixed

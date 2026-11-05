@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import { chmod, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { collectUncommitted, listDirtyPaths } from '../src/git.ts';
+import {
+    collectUncommitted,
+    listDirtyFiles,
+    listDirtyPaths,
+} from '../src/git.ts';
 import {
     commitAll,
     execFn,
@@ -139,4 +143,45 @@ test('listDirtyPaths returns undefined outside a git repo', async (t) => {
     t.after(() => rm(dir, { recursive: true, force: true }));
 
     assert.equal(await listDirtyPaths(execFn, dir), undefined);
+});
+
+test('collects changes from a subdirectory relative to that directory', async (t) => {
+    const repo = await initRepo();
+    t.after(() => rm(repo, { recursive: true, force: true }));
+
+    await write(repo, 'sub/deep/tracked.txt', 'a\n');
+    await commitAll(repo, 'init');
+    await write(repo, 'sub/deep/tracked.txt', 'a\nb\n');
+    await write(repo, 'sub/deep/untracked.txt', 'new\n');
+
+    const files = await collectUncommitted(execFn, join(repo, 'sub'));
+    const statuses = Object.fromEntries(files.map((f) => [f.path, f.status]));
+    assert.deepEqual(statuses, {
+        'deep/tracked.txt': 'modified',
+        'deep/untracked.txt': 'added',
+    });
+    assert.match(
+        files.find((f) => f.path === 'deep/tracked.txt')?.diff ?? '',
+        /\+2 b/,
+    );
+});
+
+test('listDirtyFiles keeps root-relative paths and absolute files', async (t) => {
+    const repo = await initRepo();
+    t.after(() => rm(repo, { recursive: true, force: true }));
+
+    await write(repo, 'sub/a.txt', 'a\n');
+    await commitAll(repo, 'init');
+    await write(repo, 'sub/a.txt', 'b\n');
+
+    const changes = await listDirtyFiles(execFn, join(repo, 'sub'));
+    assert.equal(changes?.root, repo);
+    assert.deepEqual(
+        changes?.files.map((f) => [f.rootRelativePath, f.absolutePath, f.tracked]),
+        [['sub/a.txt', join(repo, 'sub/a.txt'), true]],
+    );
+    assert.deepEqual(
+        [...((await listDirtyPaths(execFn, join(repo, 'sub'))) ?? [])],
+        ['a.txt'],
+    );
 });

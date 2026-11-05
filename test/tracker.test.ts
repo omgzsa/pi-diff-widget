@@ -132,3 +132,43 @@ test('does not persist a turn without writes', async () => {
 
     assert.equal(entries.length, 0);
 });
+
+function nestedEditResult(
+    toolCallId: string,
+    parentToolCallId: string,
+    path: string,
+    diff: string,
+) {
+    return {
+        type: 'tool_result',
+        toolCallId,
+        parentToolCallId,
+        toolName: 'edit',
+        input: { path, edits: [] },
+        content: [],
+        isError: false,
+        details: { diff },
+    };
+}
+
+test('persists edit diffs of calls another tool made', async (t) => {
+    const dir = await makeTempDir('pi-diff-tracker-');
+    t.after(() => rm(dir, { recursive: true, force: true }));
+
+    const { api, emit, entries } = fakePi();
+    createWriteDiffTracker(api);
+
+    await emit(
+        'tool_result',
+        nestedEditResult('c1/1', 'c1', 'a.ts', '+1 edited'),
+        { cwd: dir },
+    );
+    await emit('turn_end', {}, { cwd: dir });
+
+    const persisted = entries.find(
+        (entry) => entry.customType === 'pi-diff:nested-edits',
+    );
+    assert.deepEqual(persisted?.data, {
+        diffs: [{ toolCallId: 'c1/1', path: 'a.ts', diff: '+1 edited' }],
+    });
+});

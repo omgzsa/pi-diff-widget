@@ -2,6 +2,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import {
     generateDiffString,
+    isEditToolResult,
     isToolCallEventType,
     isWriteToolResult,
 } from '@earendil-works/pi-coding-agent';
@@ -29,6 +30,12 @@ export interface WriteDiff {
 
 /** Session entry type used to persist write diffs across reloads. */
 export const WRITE_DIFF_ENTRY = 'pi-diff:writes';
+/**
+ * Session entry type for diffs of `edit` calls another tool made. pi keeps only
+ * a bounded `nestedCalls` argument record on the parent result, never a
+ * `details.diff`, so these would otherwise vanish from the turns view.
+ */
+export const NESTED_EDIT_ENTRY = 'pi-diff:nested-edits';
 
 export interface WriteDiffRecord extends WriteDiff {
     toolCallId: string;
@@ -82,18 +89,28 @@ function extractText(content: unknown): string {
 export function createWriteDiffTracker(pi: ExtensionAPI): WriteDiffLookup {
     const pending = new Map<string, { path: string; before?: string }>();
     const diffs = new Map<string, WriteDiff>();
+    const nestedEdits = new Map<string, WriteDiff>();
     let unflushed: string[] = [];
+    let unflushedEdits: string[] = [];
 
     const flush = () => {
-        if (unflushed.length === 0) return;
         const records: WriteDiffRecord[] = [];
         for (const toolCallId of unflushed) {
             const diff = diffs.get(toolCallId);
             if (diff) records.push({ toolCallId, ...diff });
         }
+        const editRecords: WriteDiffRecord[] = [];
+        for (const toolCallId of unflushedEdits) {
+            const diff = nestedEdits.get(toolCallId);
+            if (diff) editRecords.push({ toolCallId, ...diff });
+        }
         unflushed = [];
+        unflushedEdits = [];
         if (records.length > 0) {
             pi.appendEntry(WRITE_DIFF_ENTRY, { diffs: records });
+        }
+        if (editRecords.length > 0) {
+            pi.appendEntry(NESTED_EDIT_ENTRY, { diffs: editRecords });
         }
     };
 
@@ -117,6 +134,25 @@ export function createWriteDiffTracker(pi: ExtensionAPI): WriteDiffLookup {
     });
 
     pi.on('tool_result', async (event, ctx) => {
+        // A tool that calls tools (codemode) produces nested results that never
+        // reach the transcript. Keep their diffs so the turns view can attribute
+        // them to the calling turn.
+        const parentToolCallId = (event as { parentToolCallId?: string })
+            .parentToolCallId;
+        if (parentToolCallId && isEditToolResult(event)) {
+            const diff = event.details?.diff;
+            const path = event.input.path;
+            if (!diff || typeof path !== 'string') return;
+            nestedEdits.set(event.toolCallId, { path, diff });
+            unflushedEdits.push(event.toolCallId);
+            while (nestedEdits.size > MAX_TRACKED_WRITES) {
+                const oldest = nestedEdits.keys().next().value;
+                if (oldest === undefined) break;
+                nestedEdits.delete(oldest);
+            }
+            return;
+        }
+
         if (!isWriteToolResult(event)) return;
         const snapshot = pending.get(event.toolCallId);
         if (!snapshot) return;
@@ -160,6 +196,69 @@ function readPersistedWrites(branch: SessionEntry[]): Map<string, WriteDiff> {
 }
 
 /**
+ * Compare nested call ids (`<parent>/1/2`) so edits appear in call order even
+ * though diffs arrive in separate persisted entries.
+ */
+function compareNestedIds(a: string, b: string): number {
+    const left = a.split('/');
+    const right = b.split('/');
+    const shared = Math.min(left.length, right.length);
+    for (let i = 0; i < shared; i += 1) {
+        const l = left[i] ?? '';
+        const r = right[i] ?? '';
+        const ln = Number(l);
+        const rn = Number(r);
+        if (Number.isFinite(ln) && Number.isFinite(rn) && ln !== rn) {
+            return ln - rn;
+        }
+        if (l !== r) return l.localeCompare(r);
+    }
+    return left.length - right.length;
+}
+
+/**
+ * Diffs produced by calls another tool made, keyed by the model-issued call id.
+ * Nested ids are `<parent>/<n>`; deeper nesting still starts with the model
+ * call's id, so the first segment is the owner.
+ */
+function readPersistedNested(
+    branch: SessionEntry[],
+): Map<string, WriteDiff[]> {
+    const nested = new Map<string, Map<string, WriteDiff>>();
+    for (const entry of branch) {
+        if (
+            entry.type !== 'custom' ||
+            (entry.customType !== WRITE_DIFF_ENTRY &&
+                entry.customType !== NESTED_EDIT_ENTRY)
+        ) {
+            continue;
+        }
+        const records = (entry.data as { diffs?: WriteDiffRecord[] } | undefined)
+            ?.diffs;
+        if (!Array.isArray(records)) continue;
+        for (const record of records) {
+            const slash = record.toolCallId.indexOf('/');
+            if (slash < 0) continue; // a direct call, already on its tool result
+            const parent = record.toolCallId.slice(0, slash);
+            const owned = nested.get(parent) ?? new Map<string, WriteDiff>();
+            owned.set(record.toolCallId, {
+                path: record.path,
+                diff: record.diff,
+            });
+            nested.set(parent, owned);
+        }
+    }
+    return new Map(
+        [...nested].map(([parent, owned]) => [
+            parent,
+            [...owned]
+                .sort(([a], [b]) => compareNestedIds(a, b))
+                .map(([, diff]) => diff),
+        ]),
+    );
+}
+
+/**
  * Group edits by user message from persisted session data. No git, no filesystem.
  * `edit` results already carry `details.diff`; `write` results use `lookupWrite`.
  */
@@ -169,6 +268,7 @@ export function collectTurns(
 ): Turn[] {
     const branch = session.getBranch();
     const persistedWrites = readPersistedWrites(branch);
+    const persistedNested = readPersistedNested(branch);
 
     const callArguments = new Map<string, Record<string, unknown>>();
     for (const entry of branch) {
@@ -214,6 +314,14 @@ export function collectTurns(
                 persistedWrites.get(message.toolCallId);
             if (tracked)
                 current?.edits.push({ path: tracked.path, diff: tracked.diff });
+        }
+
+        // Calls another tool made, such as a codemode script's edit/write.
+        const nested = persistedNested.get(message.toolCallId);
+        if (nested) {
+            for (const edit of nested) {
+                current?.edits.push({ path: edit.path, diff: edit.diff });
+            }
         }
     }
 

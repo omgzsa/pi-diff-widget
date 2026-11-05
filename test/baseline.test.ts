@@ -135,3 +135,30 @@ test('flush and load preserve the missing flag', async (t) => {
     assert.equal(restored.get(`${dir}/new.ts`), '');
     assert.equal(restored.wasMissing(`${dir}/new.ts`), true);
 });
+
+test('flush and load preserve skipped files', async (t) => {
+    const dir = await makeTempDir('pi-diff-baseline-');
+    t.after(() => rm(dir, { recursive: true, force: true }));
+
+    await write(dir, 'big.json', 'x'.repeat(300 * 1024));
+    const baselines = new BaselineTracker();
+    await baselines.capture(dir, 'big.json');
+
+    const { pi, entries } = captureEntry();
+    baselines.flush(pi);
+
+    const restored = new BaselineTracker();
+    restored.load([
+        {
+            type: 'custom',
+            id: 'x1',
+            parentId: null,
+            customType: BASELINE_ENTRY,
+            data: entries[0]?.data,
+        } as unknown as SessionEntry,
+    ]);
+    assert.deepEqual(restored.skippedPaths(), [
+        { path: `${dir}/big.json`, reason: 'too-large' },
+    ]);
+    assert.deepEqual(restored.paths(), []);
+});

@@ -47,6 +47,8 @@ export interface FileEditSummary {
     path: string;
     added: number;
     removed: number;
+    /** Why the file has no diff, when it could not be tracked. */
+    note?: string;
 }
 
 export interface EditSummary {
@@ -72,10 +74,11 @@ export function countDiffLines(diff: string): {
 
 /**
  * Aggregate raw diffs per file. Counts are net when each file appears once,
- * which is how the baseline widget feeds it.
+ * which is how the baseline widget feeds it. An item with a note and no diff
+ * still lists the file, so it is never silently missing.
  */
 export function summarizeDiffs(
-    diffs: Array<{ path: string; diff: string }>,
+    diffs: Array<{ path: string; diff: string; note?: string }>,
 ): EditSummary {
     const byPath = new Map<string, FileEditSummary>();
 
@@ -85,12 +88,17 @@ export function summarizeDiffs(
         if (existing) {
             existing.added += counts.added;
             existing.removed += counts.removed;
+            if (existing.note === undefined && item.note !== undefined) {
+                existing.note = item.note;
+            }
         } else {
-            byPath.set(item.path, {
+            const file: FileEditSummary = {
                 path: item.path,
                 added: counts.added,
                 removed: counts.removed,
-            });
+            };
+            if (item.note) file.note = item.note;
+            byPath.set(item.path, file);
         }
     }
 

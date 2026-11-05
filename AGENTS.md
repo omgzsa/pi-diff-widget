@@ -9,7 +9,7 @@ Interactive diff viewer extension for pi.
 - `src/git.ts` reads uncommitted changes from git.
 - `src/turns.ts` reconstructs per-turn diffs from session data, no git.
 - `src/baseline.ts` captures pre-agent file content for the net edits widget.
-- `src/summary.ts` computes net changes and reverts to baselines, no TUI.
+- `src/summary.ts` computes net changes, syncs baselines with git, and reverts to baselines, no TUI.
 - `src/view.ts` defines view models and maps collected data into them.
 - `src/document.ts` builds the flat document the viewer renders, pure.
 - `src/ui.ts` renders the scrollable overlay.

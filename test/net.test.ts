@@ -8,6 +8,8 @@ import {
     collectRevertTargets,
     computeNetSummary,
     pruneCleanBaselines,
+    reconcileBaselines,
+    recordPreexisting,
     revertTargets,
 } from '../src/summary.ts';
 import { commitAll, execFn, initRepo, makeTempDir, write } from './support.ts';
@@ -218,4 +220,114 @@ test('readFileCapped returns undefined for oversized files', async (t) => {    c
     await write(dir, 'big.txt', 'x'.repeat(64));
     assert.equal(await readFileCapped(`${dir}/big.txt`, 16), undefined);
     assert.equal(await readFileCapped(`${dir}/big.txt`, 128), 'x'.repeat(64));
+});
+
+test('prune keeps baselines git cannot judge, such as ignored files', async (t) => {
+    const repo = await initRepo();
+    t.after(() => rm(repo, { recursive: true, force: true }));
+
+    await write(repo, '.gitignore', '.scratch/\n');
+    await commitAll(repo, 'init');
+
+    await write(repo, '.scratch/notes.md', 'one\n');
+    const baselines = new BaselineTracker();
+    await baselines.capture(repo, '.scratch/notes.md');
+    await write(repo, '.scratch/notes.md', 'two\n');
+
+    await pruneCleanBaselines(baselines, execFn, repo);
+
+    assert.equal(
+        baselines.tracks(join(repo, '.scratch/notes.md')),
+        true,
+    );
+    assert.equal((await computeNetSummary(baselines, repo)).fileCount, 1);
+});
+
+test('reconcile seeds HEAD content for edits made outside edit and write', async (t) => {
+    const repo = await initRepo();
+    t.after(() => rm(repo, { recursive: true, force: true }));
+
+    await write(repo, 'a.ts', 'one\ntwo\n');
+    await commitAll(repo, 'init');
+    await write(repo, 'a.ts', 'one\nTWO\n'); // as bash would
+
+    const baselines = new BaselineTracker();
+    assert.equal(await reconcileBaselines(baselines, execFn, repo), 1);
+
+    const summary = await computeNetSummary(baselines, repo);
+    assert.equal(summary.fileCount, 1);
+    assert.equal(summary.files[0]?.added, 1);
+    assert.equal(summary.files[0]?.removed, 1);
+
+    const targets = await collectRevertTargets(baselines, repo);
+    assert.equal(targets.length, 1);
+    await revertTargets(targets);
+    assert.equal(await readFile(join(repo, 'a.ts'), 'utf8'), 'one\ntwo\n');
+});
+
+test('reconcile does not claim files that were already dirty at session start', async (t) => {
+    const repo = await initRepo();
+    t.after(() => rm(repo, { recursive: true, force: true }));
+
+    await write(repo, 'a.ts', 'one\n');
+    await commitAll(repo, 'init');
+    await write(repo, 'a.ts', 'user work\n');
+
+    const baselines = new BaselineTracker();
+    await recordPreexisting(baselines, execFn, repo);
+    await write(repo, 'a.ts', 'user work and more\n');
+
+    assert.equal(await reconcileBaselines(baselines, execFn, repo), 0);
+    assert.equal((await computeNetSummary(baselines, repo)).fileCount, 0);
+});
+
+test('reconcile treats a new untracked file as all added', async (t) => {
+    const repo = await initRepo();
+    t.after(() => rm(repo, { recursive: true, force: true }));
+
+    await write(repo, 'keep.ts', 'one\n');
+    await commitAll(repo, 'init');
+    await write(repo, 'fresh.ts', 'hello\n');
+
+    const baselines = new BaselineTracker();
+    assert.equal(await reconcileBaselines(baselines, execFn, repo), 1);
+
+    const summary = await computeNetSummary(baselines, repo);
+    assert.deepEqual(
+        summary.files.map((file) => file.path),
+        ['fresh.ts'],
+    );
+    assert.equal(summary.files[0]?.added, 1);
+});
+
+test('a file over the baseline cap is listed with a note', async (t) => {
+    const dir = await makeTempDir('pi-diff-net-');
+    t.after(() => rm(dir, { recursive: true, force: true }));
+
+    await write(dir, 'big.json', 'x'.repeat(300 * 1024));
+    const baselines = new BaselineTracker();
+    await baselines.capture(dir, 'big.json');
+
+    assert.deepEqual(baselines.skippedPaths(), [
+        { path: join(dir, 'big.json'), reason: 'too-large' },
+    ]);
+    const summary = await computeNetSummary(baselines, dir);
+    assert.equal(summary.fileCount, 1);
+    assert.equal(summary.files[0]?.note, 'too large to diff');
+});
+
+test('reconcile marks an oversized new file instead of hiding it', async (t) => {
+    const repo = await initRepo();
+    t.after(() => rm(repo, { recursive: true, force: true }));
+
+    await write(repo, 'keep.ts', 'one\n');
+    await commitAll(repo, 'init');
+    await write(repo, 'dump.json', 'x'.repeat(300 * 1024));
+
+    const baselines = new BaselineTracker();
+    assert.equal(await reconcileBaselines(baselines, execFn, repo), 1);
+
+    const summary = await computeNetSummary(baselines, repo);
+    assert.equal(summary.files[0]?.path, 'dump.json');
+    assert.equal(summary.files[0]?.note, 'too large to diff');
 });

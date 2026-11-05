@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { ExecFn } from '../src/exec.ts';
@@ -20,7 +20,8 @@ export const execFn: ExecFn = (command, args, options) =>
     });
 
 export async function makeTempDir(prefix: string): Promise<string> {
-    return mkdtemp(join(tmpdir(), prefix));
+    // Physical path, matching what git reports and baselines store.
+    return realpath(await mkdtemp(join(tmpdir(), prefix)));
 }
 
 export async function initRepo(): Promise<string> {
