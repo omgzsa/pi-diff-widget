@@ -2,7 +2,10 @@ import assert from 'node:assert/strict';
 import { readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import type { ExtensionAPI } from '@earendil-works/pi-coding-agent';
+import type {
+    ExtensionAPI,
+    SessionEntry,
+} from '@earendil-works/pi-coding-agent';
 import { BaselineTracker, readFileCapped } from '../src/baseline.ts';
 import {
     collectRevertTargets,
@@ -88,6 +91,21 @@ test('a deleted file reads as a full deletion while its directory exists', async
     const summary = await computeNetSummary(baselines, dir);
     assert.equal(summary.files[0]?.added, 0);
     assert.equal(summary.files[0]?.removed, 2);
+    assert.equal(summary.files[0]?.deleted, true);
+});
+
+test('an emptied file is not marked deleted', async (t) => {
+    const dir = await makeTempDir('pi-diff-net-');
+    t.after(() => rm(dir, { recursive: true, force: true }));
+
+    await write(dir, 'a.ts', 'one\ntwo\n');
+    const baselines = new BaselineTracker();
+    await baselines.capture(dir, 'a.ts');
+    await write(dir, 'a.ts', '');
+
+    const summary = await computeNetSummary(baselines, dir);
+    assert.equal(summary.files[0]?.removed, 2);
+    assert.equal(summary.files[0]?.deleted, undefined);
 });
 
 test('a file whose directory is gone is not a net change', async (t) => {
@@ -330,4 +348,83 @@ test('reconcile marks an oversized new file instead of hiding it', async (t) => 
     const summary = await computeNetSummary(baselines, repo);
     assert.equal(summary.files[0]?.path, 'dump.json');
     assert.equal(summary.files[0]?.note, 'too large to diff');
+});
+
+test('reconcile marks a file deleted outside edit and write', async (t) => {
+    const repo = await initRepo();
+    t.after(() => rm(repo, { recursive: true, force: true }));
+
+    await write(repo, 'gone.ts', 'one\ntwo\n');
+    await commitAll(repo, 'init');
+    await rm(join(repo, 'gone.ts'));
+
+    const baselines = new BaselineTracker();
+    assert.equal(await reconcileBaselines(baselines, execFn, repo), 1);
+
+    const summary = await computeNetSummary(baselines, repo);
+    assert.equal(summary.files[0]?.path, 'gone.ts');
+    assert.equal(summary.files[0]?.deleted, true);
+    assert.equal(summary.files[0]?.removed, 2);
+});
+
+test('a commit clears the pre-existing mark so later edits reconcile', async (t) => {
+    const repo = await initRepo();
+    t.after(() => rm(repo, { recursive: true, force: true }));
+
+    await write(repo, 'a.ts', 'one\n');
+    await commitAll(repo, 'init');
+    await write(repo, 'a.ts', 'user work\n');
+
+    const baselines = new BaselineTracker();
+    await recordPreexisting(baselines, execFn, repo);
+
+    await commitAll(repo, 'user work');
+    await pruneCleanBaselines(baselines, execFn, repo);
+
+    await write(repo, 'a.ts', 'later\n');
+    assert.equal(await reconcileBaselines(baselines, execFn, repo), 1);
+    assert.equal((await computeNetSummary(baselines, repo)).fileCount, 1);
+});
+
+test('a reload does not resurrect a baseline dropped by a commit', async (t) => {
+    const repo = await initRepo();
+    t.after(() => rm(repo, { recursive: true, force: true }));
+
+    await write(repo, 'a.ts', 'one\n');
+    await commitAll(repo, 'init');
+
+    const appended: Array<{ customType: string; data: unknown }> = [];
+    const pi = {
+        appendEntry(customType: string, data?: unknown) {
+            appended.push({ customType, data });
+        },
+    } as unknown as ExtensionAPI;
+
+    const baselines = new BaselineTracker();
+    await baselines.capture(repo, 'a.ts');
+    await write(repo, 'a.ts', 'two\n');
+    baselines.flush(pi);
+
+    await commitAll(repo, 'agent work');
+    await pruneCleanBaselines(baselines, execFn, repo);
+    baselines.flush(pi);
+
+    const restored = new BaselineTracker();
+    restored.load(
+        appended.map(
+            (entry, i) =>
+                ({
+                    type: 'custom',
+                    id: `x${i}`,
+                    parentId: null,
+                    customType: entry.customType,
+                    data: entry.data,
+                }) as unknown as SessionEntry,
+        ),
+    );
+    assert.deepEqual(restored.paths(), []);
+
+    await write(repo, 'a.ts', 'three\n');
+    assert.equal(await reconcileBaselines(restored, execFn, repo), 1);
+    assert.equal((await computeNetSummary(restored, repo)).files[0]?.removed, 1);
 });

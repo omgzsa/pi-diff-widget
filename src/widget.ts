@@ -47,10 +47,15 @@ export function buildEditSummaryLines(
 
     const shown = summary.files.slice(0, maxFiles);
     for (const file of shown) {
-        const path = truncateToWidth(file.path, MAX_PATH_WIDTH, '…');
+        const label = truncateToWidth(file.path, MAX_PATH_WIDTH, '…');
+        const path = file.deleted
+            ? theme.strikethrough(theme.fg('text', label))
+            : label;
         const detail = file.note
             ? theme.fg('dim', file.note)
-            : formatCounts(file, theme);
+            : file.deleted
+              ? theme.fg('toolDiffRemoved', 'del')
+              : formatCounts(file, theme);
         lines.push(`${path}  ${detail}`);
     }
 
@@ -130,8 +135,8 @@ export function registerDiffWidget(
         if (!ctx.hasUI) return;
         // Files changed outside `edit`/`write` (bash, codegen, other sessions)
         // get a HEAD baseline so they still appear, then prune committed work.
-        const seeded = await syncBaselines(baselines, exec, ctx.cwd);
-        if (seeded > 0) baselines.flush(pi);
+        await syncBaselines(baselines, exec, ctx.cwd);
+        baselines.flush(pi);
         if (!visible) {
             ctx.ui.setWidget(WIDGET_KEY, undefined);
             return;

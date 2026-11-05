@@ -2,8 +2,8 @@ import { renderDiff } from '@earendil-works/pi-coding-agent';
 import type { Theme } from '@earendil-works/pi-coding-agent';
 import type { DiffSection } from './view.ts';
 
-/** The theme methods `buildDocument` uses. */
-export type DocumentTheme = Pick<Theme, 'fg' | 'bold'>;
+/** The theme methods the document and widget use. */
+export type DocumentTheme = Pick<Theme, 'fg' | 'bold' | 'strikethrough'>;
 
 /** Turns one raw display diff into styled, newline-joined lines. */
 export type DiffTextRenderer = (diff: string) => string;

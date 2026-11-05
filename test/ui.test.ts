@@ -6,6 +6,7 @@ import type { DiffSection } from '../src/view.ts';
 const theme: DocumentTheme = {
     fg: (color, text) => `[${color}]${text}`,
     bold: (text) => `*${text}*`,
+    strikethrough: (text) => `~~${text}~~`,
 };
 
 test('renders a placeholder for an empty document', () => {

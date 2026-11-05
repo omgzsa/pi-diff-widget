@@ -49,6 +49,8 @@ export interface FileEditSummary {
     removed: number;
     /** Why the file has no diff, when it could not be tracked. */
     note?: string;
+    /** True when the file no longer exists but its baseline did. */
+    deleted?: boolean;
 }
 
 export interface EditSummary {
@@ -78,7 +80,12 @@ export function countDiffLines(diff: string): {
  * still lists the file, so it is never silently missing.
  */
 export function summarizeDiffs(
-    diffs: Array<{ path: string; diff: string; note?: string }>,
+    diffs: Array<{
+        path: string;
+        diff: string;
+        note?: string;
+        deleted?: boolean;
+    }>,
 ): EditSummary {
     const byPath = new Map<string, FileEditSummary>();
 
@@ -98,6 +105,7 @@ export function summarizeDiffs(
                 removed: counts.removed,
             };
             if (item.note) file.note = item.note;
+            if (item.deleted) file.deleted = true;
             byPath.set(item.path, file);
         }
     }

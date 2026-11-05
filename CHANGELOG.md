@@ -11,6 +11,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - The edits widget refreshes after a user `!` or `!!` bash command. Those
   commands run outside the agent loop and emit no turn boundary, so the local
   bash backend is wrapped and the panel updates once the command exits.
+- Deleted files are struck through and labelled `del` in the widget. Detection
+  covers both a file deleted in git and one deleted through `bash`, since
+  reconciliation baselines the later from `HEAD`. An emptied file keeps its
+  normal counts.
+
+### Fixed
+
+- Dropping a baseline, for example after its file is committed, is now persisted
+  as a removal. Reloading or resuming a session no longer resurrects an older
+  baseline and reports already-committed work as new.
+- A file that was dirty when the session started stops being protected once it
+  is committed or reverted. Later edits reconcile from the new `HEAD` instead of
+  staying invisible for the rest of the session.
 
 ## [0.3.0] - 2026-11-05
 

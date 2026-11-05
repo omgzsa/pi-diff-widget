@@ -162,3 +162,34 @@ test('flush and load preserve skipped files', async (t) => {
     ]);
     assert.deepEqual(restored.paths(), []);
 });
+
+test('a pruned baseline stays gone after a reload', async (t) => {
+    const dir = await makeTempDir('pi-diff-baseline-');
+    t.after(() => rm(dir, { recursive: true, force: true }));
+
+    await write(dir, 'a.ts', 'one\n');
+    const baselines = new BaselineTracker();
+    await baselines.capture(dir, 'a.ts');
+
+    const { pi, entries } = captureEntry();
+    baselines.flush(pi);
+
+    // Committing drops the baseline; the removal must be persisted.
+    baselines.retain(() => false);
+    baselines.flush(pi);
+
+    const restored = new BaselineTracker();
+    restored.load(
+        entries.map(
+            (entry, i) =>
+                ({
+                    type: 'custom',
+                    id: `x${i}`,
+                    parentId: null,
+                    customType: entry.customType,
+                    data: entry.data,
+                }) as unknown as SessionEntry,
+        ),
+    );
+    assert.deepEqual(restored.paths(), []);
+});

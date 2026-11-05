@@ -83,3 +83,10 @@ test('summarizeDiffs aggregates per file and sorts by path', () => {
         { path: 'b.ts', added: 2, removed: 1 },
     ]);
 });
+
+test('summarizeDiffs carries the deleted flag', () => {
+    const summary = summarizeDiffs([
+        { path: 'gone.ts', diff: '-1 a\n-2 b', deleted: true },
+    ]);
+    assert.equal(summary.files[0]?.deleted, true);
+});

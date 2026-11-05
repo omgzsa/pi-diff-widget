@@ -25,6 +25,7 @@ initTheme('dark');
 const theme: DocumentTheme = {
     fg: (color, text) => `[${color}]${text}`,
     bold: (text) => `*${text}*`,
+    strikethrough: (text) => `~~${text}~~`,
 };
 
 type Command = {

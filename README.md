@@ -74,10 +74,14 @@ changes git can see are reconciled: an ignored path changed through `bash`
 stays invisible, while one touched through `edit` or `write` is tracked and
 survives the commit prune.
 
-Files over the 256 KB cap are listed with a note instead of disappearing. When
-more than eight files changed, the panel lists the first eight and groups the
-rest by folder with per-folder counts, so a large session still names every
-folder that has edits.
+Deleted files are struck through and labelled `del`; their removed lines still
+count in the header. Files over the 256 KB cap are listed with a note instead of
+disappearing. When more than eight files changed, the panel lists the first
+eight and groups the rest by folder with per-folder counts, so a large session
+still names every folder that has edits.
+
+Dropping a baseline is persisted as a removal, so reloading or resuming a
+session never brings back a baseline for work that was already committed.
 
 It hides itself when nothing differs.
 

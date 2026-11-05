@@ -45,28 +45,35 @@ export async function computeNetSummary(
     baselines: BaselineTracker,
     cwd: string,
 ): Promise<EditSummary> {
-    const diffs: Array<{ path: string; diff: string; note?: string }> = [];
+    const diffs: Array<{
+        path: string;
+        diff: string;
+        note?: string;
+        deleted?: boolean;
+    }> = [];
     const displayCwd = await realCwd(cwd);
 
     for (const absolute of baselines.paths()) {
-        const current = await readCurrent(absolute);
-        if (current === undefined) {
-            if (await locationGone(absolute)) continue;
-            const probe = await probeBaseline(absolute);
-            if (probe.kind !== 'content') {
-                diffs.push({
-                    path: displayPathOf(displayCwd, absolute),
-                    diff: '',
-                    note: SKIP_NOTE[probe.kind],
-                });
-            }
+        if (await locationGone(absolute)) continue;
+        const probe = await probeBaseline(absolute);
+        if (probe.kind !== 'content') {
+            diffs.push({
+                path: displayPathOf(displayCwd, absolute),
+                diff: '',
+                note: SKIP_NOTE[probe.kind],
+            });
             continue;
         }
+
         const baseline = baselines.get(absolute) ?? '';
-        const { diff } = generateDiffString(baseline, current);
+        const { diff } = generateDiffString(baseline, probe.content);
         if (!diff) continue;
 
-        diffs.push({ path: displayPathOf(displayCwd, absolute), diff });
+        diffs.push({
+            path: displayPathOf(displayCwd, absolute),
+            diff,
+            deleted: !probe.existed && baseline.length > 0,
+        });
     }
 
     for (const { path, reason } of baselines.skippedPaths()) {
@@ -248,6 +255,8 @@ async function pruneRepoBaselines(
     if (!repo) return;
 
     const dirty = new Set(repo.files.map((file) => file.absolutePath));
+    baselines.retainPreexisting((absolute) => dirty.has(absolute));
+
     const candidates: Array<{ absolute: string; rootRelative: string }> = [];
     for (const absolute of live) {
         if (dirty.has(absolute)) continue;

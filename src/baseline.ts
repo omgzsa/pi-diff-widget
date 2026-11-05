@@ -18,6 +18,11 @@ export interface BaselineRecord {
     missing?: boolean;
     /** Set instead of content when the file cannot be tracked. */
     skipped?: SkipReason;
+    /**
+     * The baseline was dropped, for example after the file was committed.
+     * Persisted so a reload does not resurrect an older entry for the path.
+     */
+    removed?: true;
 }
 
 export interface BaselineRead {
@@ -100,6 +105,8 @@ export class BaselineTracker {
     private readonly missing = new Set<string>();
     private readonly skipped = new Map<string, SkipReason>();
     private readonly unflushed = new Set<string>();
+    /** Paths whose baseline was dropped and whose removal is not persisted yet. */
+    private readonly removals = new Set<string>();
     /** Dirty when the session started; never seeded from HEAD. */
     private readonly preexisting = new Set<string>();
 
@@ -148,6 +155,7 @@ export class BaselineTracker {
         this.skipped.set(path, reason);
         this.baselines.delete(path);
         this.missing.delete(path);
+        this.removals.delete(path);
         this.unflushed.add(path);
     }
 
@@ -163,12 +171,20 @@ export class BaselineTracker {
         } else {
             this.store(path, { content, existed });
         }
+        this.removals.delete(path);
         this.unflushed.add(path);
     }
 
     /** Remember files that were already dirty when the session started. */
     markPreexisting(paths: Iterable<string>): void {
         for (const path of paths) this.preexisting.add(path);
+    }
+
+    /** Drop pre-existing marks whose path no longer passes the predicate. */
+    retainPreexisting(keep: (path: string) => boolean): void {
+        for (const path of [...this.preexisting]) {
+            if (!keep(path)) this.preexisting.delete(path);
+        }
     }
 
     isPreexisting(path: string): boolean {
@@ -194,12 +210,16 @@ export class BaselineTracker {
                 this.baselines.delete(path);
                 this.missing.delete(path);
                 this.unflushed.delete(path);
+                this.removals.add(path);
+                this.preexisting.delete(path);
             }
         }
         for (const path of [...this.skipped.keys()]) {
             if (!keep(path)) {
                 this.skipped.delete(path);
                 this.unflushed.delete(path);
+                this.removals.add(path);
+                this.preexisting.delete(path);
             }
         }
     }
@@ -207,14 +227,16 @@ export class BaselineTracker {
     private store(path: string, read: BaselineRead): void {
         this.baselines.set(path, read.content);
         this.skipped.delete(path);
+        this.removals.delete(path);
         if (read.existed) this.missing.delete(path);
         else this.missing.add(path);
     }
 
     flush(pi: ExtensionAPI): void {
-        if (this.unflushed.size === 0) return;
+        const changed = new Set([...this.unflushed, ...this.removals]);
+        if (changed.size === 0) return;
         const records: BaselineRecord[] = [];
-        for (const path of this.unflushed) {
+        for (const path of changed) {
             if (this.baselines.has(path)) {
                 records.push({
                     path,
@@ -224,9 +246,14 @@ export class BaselineTracker {
                 continue;
             }
             const reason = this.skipped.get(path);
-            if (reason) records.push({ path, skipped: reason });
+            if (reason) {
+                records.push({ path, skipped: reason });
+                continue;
+            }
+            if (this.removals.has(path)) records.push({ path, removed: true });
         }
         this.unflushed.clear();
+        this.removals.clear();
         if (records.length > 0) {
             pi.appendEntry(BASELINE_ENTRY, { baselines: records });
         }
@@ -245,6 +272,12 @@ export class BaselineTracker {
             )?.baselines;
             if (!Array.isArray(records)) continue;
             for (const record of records) {
+                if (record.removed) {
+                    this.baselines.delete(record.path);
+                    this.missing.delete(record.path);
+                    this.skipped.delete(record.path);
+                    continue;
+                }
                 if (record.skipped) {
                     this.baselines.delete(record.path);
                     this.missing.delete(record.path);

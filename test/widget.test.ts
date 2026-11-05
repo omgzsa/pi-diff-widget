@@ -12,6 +12,7 @@ import { commitAll, execFn, initRepo, write } from './support.ts';
 const theme: DocumentTheme = {
     fg: (color, text) => `[${color}]${text}`,
     bold: (text) => `*${text}*`,
+    strikethrough: (text) => `~~${text}~~`,
 };
 
 const summary: EditSummary = {
@@ -161,4 +162,21 @@ test('refreshes the panel after a ! bash command', async (t) => {
         await new Promise((resolve) => setTimeout(resolve, 20));
     }
     assert.equal(baselines.tracks(fresh), true);
+});
+
+
+test('strikes through a deleted file and labels it del', () => {
+    const deleted: EditSummary = {
+        fileCount: 1,
+        added: 0,
+        removed: 2,
+        files: [
+            { path: 'src/gone.ts', added: 0, removed: 2, deleted: true },
+        ],
+    };
+    const lines = buildEditSummaryLines(deleted, theme);
+
+    assert.match(lines[1] ?? '', /~~\[text\]src\/gone\.ts~~/);
+    assert.match(lines[1] ?? '', /\[toolDiffRemoved\]del/);
+    assert.doesNotMatch(lines[1] ?? '', /-2/);
 });

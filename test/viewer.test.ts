@@ -9,6 +9,7 @@ import type { DiffSection, TurnView, ViewMode } from '../src/view.ts';
 const theme: DocumentTheme = {
     fg: (color, text) => `[${color}]${text}`,
     bold: (text) => `*${text}*`,
+    strikethrough: (text) => `~~${text}~~`,
 };
 
 const renderDiffText = (diff: string) =>
